@@ -23,12 +23,9 @@ systemctl is-enabled mirror-world-marketing-knowledge-sync.timer || true
 systemctl is-active mirror-world-marketing-knowledge-sync.timer || true
 sudo systemctl enable --now mirror-world-marketing-daily-post.timer
 
-sudo systemctl enable --now mirror-world-marketing-review-agent.service
-sudo systemctl restart mirror-world-marketing-review-agent.service
-
 echo "Daily post timer:"
 systemctl list-timers mirror-world-marketing-daily-post.timer --no-pager || true
 
-echo "Review agent:"
+echo "Review agent service file installed; RSAdminBot is the active Discord bridge."
 systemctl is-enabled mirror-world-marketing-review-agent.service || true
 systemctl is-active mirror-world-marketing-review-agent.service || true

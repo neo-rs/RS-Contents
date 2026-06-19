@@ -1,0 +1,16 @@
+[Unit]
+Description=Mirror World - Marketing review chat agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rsadmin
+WorkingDirectory=/home/rsadmin/bots/mirror-world
+ExecStart=/home/rsadmin/bots/mirror-world/.venv/bin/python -m MarketingKnowledgeBase.run_tool agent_start_review --interval 10 --limit 20
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

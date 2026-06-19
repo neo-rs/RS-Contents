@@ -14,7 +14,7 @@ from MarketingKnowledgeBase.agent.state import (
     set_review_last_seen,
 )
 from MarketingKnowledgeBase.agent.workflow import agent_handle_review_message
-from MarketingKnowledgeBase.discord_api import extract_message_text, fetch_channel_messages
+from MarketingKnowledgeBase.discord_api import extract_message_text, fetch_channel_messages, fetch_guild_member
 from MarketingKnowledgeBase.discord_log import _post_discord_payload
 from MarketingKnowledgeBase.secrets import discord_bot_token
 
@@ -42,6 +42,41 @@ def _review_channel_id(cfg: Dict[str, Any]) -> int:
 def _message_author_id(msg: Dict[str, Any]) -> str:
     author = msg.get("author") or {}
     return str(author.get("id") or "") if isinstance(author, dict) else ""
+
+
+def _review_guild_id(cfg: Dict[str, Any]) -> int:
+    agent = cfg.get("agent") or {}
+    feedback = cfg.get("feedback") or {}
+    publishing = cfg.get("publishing") or {}
+    return int(
+        agent.get("review_guild_id")
+        or feedback.get("review_guild_id")
+        or publishing.get("review_guild_id")
+        or publishing.get("production_guild_id")
+        or cfg.get("guild_id")
+        or 0
+    )
+
+
+def _author_allowed(*, cfg: Dict[str, Any], headers: Dict[str, str], user_id: str) -> bool:
+    agent = cfg.get("agent") or {}
+    allowed_users = {str(uid) for uid in (agent.get("allowed_user_ids") or []) if str(uid).strip()}
+    allowed_roles = {str(rid) for rid in (agent.get("allowed_role_ids") or []) if str(rid).strip()}
+    if not allowed_users and not allowed_roles:
+        return True
+    if user_id in allowed_users:
+        return True
+    if not allowed_roles:
+        return False
+    guild_id = _review_guild_id(cfg)
+    if guild_id <= 0 or not user_id:
+        return False
+    try:
+        member = fetch_guild_member(guild_id, user_id, headers)
+    except Exception:
+        return False
+    roles = {str(role) for role in (member.get("roles") or [])}
+    return bool(roles & allowed_roles)
 
 
 def _is_bot_message(msg: Dict[str, Any]) -> bool:
@@ -131,6 +166,11 @@ def poll_review_channel_once(*, limit: int = 20, channel_id: int = 0) -> Dict[st
     for msg in new_messages:
         mid = str(msg.get("id") or "")
         text = extract_message_text(msg)
+        author_id = _message_author_id(msg)
+        if not _author_allowed(cfg=cfg, headers=headers, user_id=author_id):
+            handled.append({"message_id": mid, "ok": False, "skipped": "unauthorized_author", "author_id": author_id})
+            set_review_last_seen(channel_id, mid)
+            continue
         run_id = _run_id_from_text(text)
         if not run_id:
             set_review_last_seen(channel_id, mid)

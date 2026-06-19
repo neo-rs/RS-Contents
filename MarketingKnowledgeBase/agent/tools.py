@@ -27,6 +27,19 @@ def _read_base_json(name: str, default: Any) -> Any:
 
 
 def _load_candidates() -> Dict[str, Any]:
+    try:
+        from MarketingKnowledgeBase.archives import preferred_candidate_paths
+
+        cfg = read_json(BASE / "config.json", {}) or {}
+        tz_name = str(((cfg.get("publishing") or {}).get("schedule") or {}).get("timezone") or "America/New_York")
+        for path in preferred_candidate_paths(DATA, tz_name):
+            if path.exists():
+                doc = read_json(path, {"candidates": []})
+                if isinstance(doc, dict) and doc.get("candidates"):
+                    doc["_agent_candidate_source"] = str(path)
+                    return doc
+    except Exception:
+        pass
     return read_json(DATA / "story_candidates.json", {"candidates": []})
 
 

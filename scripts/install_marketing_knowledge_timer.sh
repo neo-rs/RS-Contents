@@ -16,20 +16,19 @@ for unit in mirror-world-marketing-knowledge-sync.service mirror-world-marketing
 done
 
 sudo systemctl daemon-reload
-sudo systemctl enable mirror-world-marketing-knowledge-sync.timer
-sudo systemctl start mirror-world-marketing-knowledge-sync.timer
-sudo systemctl start mirror-world-marketing-knowledge-sync.service || true
+sudo systemctl enable --now mirror-world-marketing-knowledge-sync.timer
 
 echo "Timer status:"
-systemctl status mirror-world-marketing-knowledge-sync.timer --no-pager || true
-sudo systemctl enable mirror-world-marketing-daily-post.timer
-sudo systemctl start mirror-world-marketing-daily-post.timer
+systemctl is-enabled mirror-world-marketing-knowledge-sync.timer || true
+systemctl is-active mirror-world-marketing-knowledge-sync.timer || true
+sudo systemctl enable --now mirror-world-marketing-daily-post.timer
 
-sudo systemctl enable mirror-world-marketing-review-agent.service
+sudo systemctl enable --now mirror-world-marketing-review-agent.service
 sudo systemctl restart mirror-world-marketing-review-agent.service
 
 echo "Daily post timer:"
 systemctl list-timers mirror-world-marketing-daily-post.timer --no-pager || true
 
 echo "Review agent:"
-systemctl status mirror-world-marketing-review-agent.service --no-pager || true
+systemctl is-enabled mirror-world-marketing-review-agent.service || true
+systemctl is-active mirror-world-marketing-review-agent.service || true

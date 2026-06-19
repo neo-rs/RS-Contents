@@ -13,8 +13,17 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from MarketingKnowledgeBase.ai_writer import generate_dm_day_copy, generate_dm_sequence, generate_marketing_copy
+from MarketingKnowledgeBase.agent.workflow import (
+    agent_explain,
+    agent_generate,
+    agent_handle_review_message,
+    agent_list_runs,
+    agent_publish,
+    agent_remember,
+    agent_revise,
+    agent_show_run,
+)
 from MarketingKnowledgeBase.draft_composer import compose_marketing_draft
-from MarketingKnowledgeBase.post_publisher import publish_marketing_draft
 from MarketingKnowledgeBase.post_queue import PostQueue
 from MarketingKnowledgeBase.story_candidates import find_candidate, find_candidate_by_message_id
 
@@ -159,6 +168,8 @@ def cmd_rewrite_dm_sequence(args: argparse.Namespace) -> Dict[str, Any]:
 
 
 def cmd_publish_approved_post(args: argparse.Namespace) -> Dict[str, Any]:
+    from MarketingKnowledgeBase.post_publisher import publish_marketing_draft
+
     queue_id = str(args.queue_id or "").strip()
     queue = PostQueue(_data_dir() / "post_queue.json")
     draft: Dict[str, Any]
@@ -183,6 +194,77 @@ def cmd_publish_approved_post(args: argparse.Namespace) -> Dict[str, Any]:
     if queue_id and args.live:
         queue.update_status(queue_id, "posted", note="published via marketing-knowledge MCP")
     return result
+
+
+def cmd_agent_generate(args: argparse.Namespace) -> Dict[str, Any]:
+    story_id = str(args.story_id or "").strip()
+    if not story_id:
+        raise ValueError("story_id is required")
+    return agent_generate(
+        story_id=story_id,
+        destination_id=str(args.destination_id or "discord_what_you_missed"),
+        requested_by=str(args.requested_by or "cli"),
+        target_channel=str(args.target_channel or ""),
+        extra_instructions=str(args.extra_instructions or ""),
+        use_tool_orchestrator=not bool(args.deterministic),
+    )
+
+
+def cmd_agent_revise(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_revise(
+        run_id=str(args.run_id or "").strip(),
+        feedback_text=str(args.feedback or ""),
+        requested_by=str(args.requested_by or "cli"),
+    )
+
+
+def cmd_agent_explain(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_explain(run_id=str(args.run_id or "").strip())
+
+
+def cmd_agent_remember(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_remember(
+        run_id=str(args.run_id or "").strip(),
+        rule_text=str(args.rule or ""),
+        requested_by=str(args.requested_by or "cli"),
+        scope=str(args.scope or "global_rs_memory"),
+    )
+
+
+def cmd_agent_publish(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_publish(
+        run_id=str(args.run_id or "").strip(),
+        channel_id=int(args.channel_id) if args.channel_id else 0,
+        requested_by=str(args.requested_by or "cli"),
+    )
+
+
+def cmd_agent_handle_review_message(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_handle_review_message(
+        run_id=str(args.run_id or "").strip(),
+        message_text=str(args.message or ""),
+        requested_by=str(args.requested_by or "cli"),
+        channel_id=int(args.channel_id) if args.channel_id else 0,
+    )
+
+
+def cmd_agent_list_runs(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_list_runs(limit=int(args.limit or 25))
+
+
+def cmd_agent_show_run(args: argparse.Namespace) -> Dict[str, Any]:
+    return agent_show_run(run_id=str(args.run_id or "").strip())
+
+
+def cmd_agent_start_review(args: argparse.Namespace) -> Dict[str, Any]:
+    from MarketingKnowledgeBase.agent.discord_review_agent import run_review_agent
+
+    return run_review_agent(
+        interval_s=int(args.interval or 10),
+        limit=int(args.limit or 20),
+        channel_id=int(args.channel_id) if args.channel_id else 0,
+        once=bool(args.once),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -233,6 +315,51 @@ def main(argv: list[str] | None = None) -> int:
     p_pub.add_argument("--live", action="store_true", help="Actually post to Discord")
     p_pub.add_argument("--force", action="store_true")
 
+    p_ag = sub.add_parser("agent_generate")
+    p_ag.add_argument("--story-id", required=True)
+    p_ag.add_argument("--destination-id", default="discord_what_you_missed")
+    p_ag.add_argument("--target-channel", default="")
+    p_ag.add_argument("--extra-instructions", default="")
+    p_ag.add_argument("--requested-by", default="cli")
+    p_ag.add_argument("--deterministic", action="store_true")
+
+    p_ar = sub.add_parser("agent_revise")
+    p_ar.add_argument("--run-id", required=True)
+    p_ar.add_argument("--feedback", required=True)
+    p_ar.add_argument("--requested-by", default="cli")
+
+    p_ax = sub.add_parser("agent_explain")
+    p_ax.add_argument("--run-id", required=True)
+
+    p_am = sub.add_parser("agent_remember")
+    p_am.add_argument("--rule", required=True)
+    p_am.add_argument("--run-id", default="")
+    p_am.add_argument("--scope", default="global_rs_memory")
+    p_am.add_argument("--requested-by", default="cli")
+
+    p_ap = sub.add_parser("agent_publish")
+    p_ap.add_argument("--run-id", required=True)
+    p_ap.add_argument("--channel-id", default="")
+    p_ap.add_argument("--requested-by", default="cli")
+
+    p_ah = sub.add_parser("agent_handle_review_message")
+    p_ah.add_argument("--run-id", required=True)
+    p_ah.add_argument("--message", required=True)
+    p_ah.add_argument("--requested-by", default="cli")
+    p_ah.add_argument("--channel-id", default="")
+
+    p_al = sub.add_parser("agent_list_runs")
+    p_al.add_argument("--limit", type=int, default=25)
+
+    p_as = sub.add_parser("agent_show_run")
+    p_as.add_argument("--run-id", required=True)
+
+    p_sr = sub.add_parser("agent_start_review")
+    p_sr.add_argument("--once", action="store_true")
+    p_sr.add_argument("--interval", type=int, default=10)
+    p_sr.add_argument("--limit", type=int, default=20)
+    p_sr.add_argument("--channel-id", default="")
+
     args = parser.parse_args(argv)
     handlers = {
         "list_story_candidates": cmd_list_story_candidates,
@@ -245,6 +372,15 @@ def main(argv: list[str] | None = None) -> int:
         "generate_dm_day_copy": cmd_generate_dm_day_copy,
         "rewrite_dm_sequence": cmd_rewrite_dm_sequence,
         "publish_approved_post": cmd_publish_approved_post,
+        "agent_generate": cmd_agent_generate,
+        "agent_revise": cmd_agent_revise,
+        "agent_explain": cmd_agent_explain,
+        "agent_remember": cmd_agent_remember,
+        "agent_publish": cmd_agent_publish,
+        "agent_handle_review_message": cmd_agent_handle_review_message,
+        "agent_list_runs": cmd_agent_list_runs,
+        "agent_show_run": cmd_agent_show_run,
+        "agent_start_review": cmd_agent_start_review,
     }
     result = handlers[args.command](args)
     sys.stdout.reconfigure(encoding="utf-8")

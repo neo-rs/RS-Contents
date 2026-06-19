@@ -159,9 +159,12 @@ def post_marketing_generation_audit(
         {"name": "Market Enrichment", "value": str(bool(draft.get("market_enrichment_used"))), "inline": True},
         {"name": "Candidate Score", "value": str(draft.get("candidate_score") or "-"), "inline": True},
         {"name": "Post History Recorded", "value": str(bool(draft.get("post_history_recorded"))), "inline": True},
+        {"name": "Style Variant", "value": _short(str(draft.get("style_variant") or "-"), 200), "inline": True},
+        {"name": "Preferred Emoji", "value": _short(str(draft.get("preferred_emoji") or "-"), 200), "inline": True},
         {"name": "Source", "value": _short(str(draft.get("archive_source") or "-"), 700), "inline": False},
         {"name": "Research Sources", "value": _short("\n".join(str(p) for p in (draft.get("research_source_files") or [])) or "-", 900), "inline": False},
         {"name": "Story Angle", "value": _short(str(draft.get("story_angle") or "-"), 700), "inline": False},
+        {"name": "Style Direction", "value": _short(str(draft.get("style_variant_instruction") or "-"), 700), "inline": False},
         {"name": "Routing Reason", "value": _short(str(routing.get("reason") or "-"), 700), "inline": False},
         {"name": "Rule Violations", "value": _short(", ".join(draft.get("rule_violations") or []) or "none", 500), "inline": False},
     ]

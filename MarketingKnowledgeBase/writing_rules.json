@@ -9,9 +9,10 @@
     "knock": "<a:rslknock:1247632729948946472>"
   },
   "emoji_rules": [
-    "Prefer RS custom emojis over unicode emoji.",
-    "Max 1 RS animated emoji per message (headline OR CTA, not both).",
-    "Max 1 unicode emoji per message (optional: rocket on CTA only).",
+    "Use emojis lightly. A strong post may use no emoji, one RS custom emoji, or one normal unicode emoji.",
+    "Do not force RS custom emojis. Use normal emojis when they fit the story better.",
+    "Max 1 animated RS emoji per message. Do not stack emojis in the headline and CTA.",
+    "Max 2 total emojis per message, including RS custom and unicode emojis.",
     "Use <:rscheck:1352700145845801071> for feature/benefit bullet lists (day_1 welcome)."
   ],
   "link_rules": [
@@ -50,7 +51,35 @@
   "post_style_rules": [
     "Publish as plain chat content, not embeds.",
     "Attach proof images as file uploads when available (reuse_assets URLs).",
-    "Headline can use **bold** in content; no embed-only formatting."
+    "Headline can use **bold** in content; no embed-only formatting.",
+    "Vary structure across posts. Do not use the same headline/body/proof/CTA pattern repeatedly."
+  ],
+  "style_variants": [
+    {
+      "name": "missed_window",
+      "instruction": "Lead with the moment members caught before others. Keep it deal-alert focused, then close with what the reader missed.",
+      "preferred_emoji": "optional: <a:rshype:910339563132682250> or 👀"
+    },
+    {
+      "name": "money_proof",
+      "instruction": "Lead with the dollar spread or profit proof. Use short proof-first lines and avoid generic hype.",
+      "preferred_emoji": "optional: <a:rsmoneyrain:910339595797925898> or 💸"
+    },
+    {
+      "name": "member_win",
+      "instruction": "Lead with the member outcome. Make it feel like a community win, not a product ad.",
+      "preferred_emoji": "optional: <a:rsllove:1247632675766931558> or 🔥"
+    },
+    {
+      "name": "urgent_drop",
+      "instruction": "Lead with timing, stock, or local pickup urgency. Keep it fast and direct.",
+      "preferred_emoji": "optional: <a:rslknock:1247632729948946472> or ⏰"
+    },
+    {
+      "name": "checklist",
+      "instruction": "Use a compact checklist-style recap only when there are multiple concrete facts. Do not use if the source is thin.",
+      "preferred_emoji": "optional: <:rscheck:1352700145845801071> or ✅"
+    }
   ],
   "mavely_affiliate": {
     "canonical_owner": "RSForwarder/affiliate_rewriter.py",

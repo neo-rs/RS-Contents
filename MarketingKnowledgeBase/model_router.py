@@ -9,7 +9,8 @@ from MarketingKnowledgeBase.secrets import load_secrets
 _BASE_DEFAULTS = {
     "fast": "gpt-4o-mini",
     "balanced": "gpt-4o",
-    "quality": "gpt-4.1",
+    "quality": "gpt-5.5",
+    "pro": "gpt-5.5-pro",
 }
 
 # Welcome + close days need stronger persuasion; story-anchored days stay fast.
@@ -38,7 +39,7 @@ def _tier_models() -> Dict[str, str]:
     models = dict(_BASE_DEFAULTS)
     overrides = cfg.get("models")
     if isinstance(overrides, dict):
-        for tier in ("fast", "balanced", "quality"):
+        for tier in ("fast", "balanced", "quality", "pro"):
             val = str(overrides.get(tier) or "").strip()
             if val:
                 models[tier] = val
@@ -93,6 +94,9 @@ def resolve_model(
     if task in ("generate_marketing_copy", "marketing_copy"):
         tier = "balanced"
         reason = "Marketing post — balanced quality for voice + grounded facts"
+    elif task in ("vision_summary", "image_vision", "proof_image_summary"):
+        tier = "quality"
+        reason = "Proof image understanding — quality multimodal tier"
     elif task in ("generate_dm_day_copy", "dm_day_copy"):
         dk = str(day_key or "").strip()
         if dk in _WELCOME_CLOSE_DAYS:
@@ -119,4 +123,59 @@ def resolve_model(
         "tier": tier,
         "reason": reason,
         "mode": "auto",
+    }
+
+
+def resolve_model_for_stage(
+    *,
+    workflow_type: str,
+    stage: str,
+    grounding_chars: int = 0,
+    model_override: Optional[str] = None,
+) -> Dict[str, str]:
+    """Pick a model by workflow stage for agentic content automation."""
+    cfg = _ai_writer_config()
+    stage_overrides = cfg.get("models_by_stage") or cfg.get("model_by_stage") or {}
+    requested = str(model_override or "").strip()
+    if requested and not _is_auto(requested):
+        return {
+            "model": requested,
+            "tier": "manual",
+            "reason": f"Fixed model override for {workflow_type}/{stage}: {requested}",
+            "mode": "manual",
+        }
+    if isinstance(stage_overrides, dict):
+        val = str(stage_overrides.get(stage) or "").strip()
+        if val:
+            return {
+                "model": val,
+                "tier": stage,
+                "reason": f"Configured stage model for {workflow_type}/{stage}",
+                "mode": "stage",
+            }
+
+    models = _tier_models()
+    stage_key = str(stage or "").strip().lower()
+    workflow = str(workflow_type or "").strip().lower()
+    if stage_key in {"extract", "classify", "command_parse", "summarize"}:
+        tier = "fast"
+    elif stage_key in {"draft", "rewrite"}:
+        tier = "balanced"
+    elif stage_key in {"reason", "critique", "repair", "final", "vision", "tool_orchestration"}:
+        tier = "quality"
+    elif stage_key in {"campaign_strategy", "hard_repair"}:
+        tier = "pro"
+    else:
+        tier = "balanced"
+
+    if workflow.startswith("ghl_") and stage_key in {"draft", "rewrite"}:
+        tier = "balanced"
+    if grounding_chars >= _LONG_CONTEXT_CHARS and tier in {"fast", "balanced"}:
+        tier = _bump_tier(tier)
+
+    return {
+        "model": models.get(tier) or models["balanced"],
+        "tier": tier,
+        "reason": f"Stage routing for {workflow_type}/{stage} ({grounding_chars} chars)",
+        "mode": "stage",
     }

@@ -13,6 +13,7 @@ from MarketingKnowledgeBase.channel_display import channel_mention, sanitize_cha
 from MarketingKnowledgeBase.draft_composer import _asset_urls, compose_marketing_draft
 from MarketingKnowledgeBase.marketing_memory import load_marketing_memory, memory_prompt
 from MarketingKnowledgeBase.model_router import resolve_model
+from MarketingKnowledgeBase.openai_client import OpenAIResponsesClient
 from MarketingKnowledgeBase.secrets import load_secrets, openai_api_key
 from MarketingKnowledgeBase.story_research import build_research_pack, research_prompt
 from MarketingKnowledgeBase.story_candidates import find_candidate
@@ -276,39 +277,22 @@ def _openai_chat(
     )
     chosen_model = routing["model"]
 
-    payload = {
-        "model": chosen_model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    }
-    if not str(chosen_model).lower().startswith("gpt-5"):
-        payload["temperature"] = temperature
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
+    client = OpenAIResponsesClient(api_key=api_key, timeout_s=120)
+    result = client.responses_text(
+        model=chosen_model,
+        instructions=system,
+        input_text=user,
+        reasoning_effort="medium",
+        store=False,
+        fallback_to_chat=True,
     )
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenAI API error {exc.code}: {detail}") from exc
-
-    choices = body.get("choices") or []
-    if not choices:
-        raise RuntimeError(f"OpenAI returned no choices: {body}")
-    content = choices[0].get("message", {}).get("content")
-    if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("OpenAI returned empty content")
-    routing["usage"] = body.get("usage") or {}
-    return content.strip(), routing
+    if not result.ok:
+        raise RuntimeError(result.error or "OpenAI returned empty content")
+    routing["usage"] = result.usage
+    routing["endpoint"] = result.endpoint
+    if result.error:
+        routing["fallback_note"] = result.error
+    return result.text.strip(), routing
 
 
 def _strip_code_fence(text: str) -> str:
@@ -317,6 +301,15 @@ def _strip_code_fence(text: str) -> str:
         s = re.sub(r"^```[a-zA-Z]*\n?", "", s)
         s = re.sub(r"\n?```$", "", s)
     return s.strip()
+
+
+def _style_variant(candidate: Dict[str, Any], rules: Dict[str, Any]) -> Dict[str, Any]:
+    variants = [row for row in (rules.get("style_variants") or []) if isinstance(row, dict)]
+    if not variants:
+        return {}
+    key = f"{candidate.get('story_id') or ''}:{candidate.get('message_id') or ''}:{candidate.get('bucket') or ''}"
+    idx = sum(ord(ch) for ch in key) % len(variants)
+    return dict(variants[idx])
 
 
 def generate_marketing_copy(
@@ -340,6 +333,8 @@ def generate_marketing_copy(
 
     voice = _read_json(_BASE / "voice.json") or {}
     offers = _read_json(_BASE / "offers.json") or {}
+    writing_rules = _read_json(_BASE / "writing_rules.json") or {}
+    style_variant = _style_variant(candidate, writing_rules)
     skeleton = compose_marketing_draft(
         candidate, voice=voice, offers=offers, target_channel=target_channel
     )
@@ -371,13 +366,22 @@ def generate_marketing_copy(
             "\nSTYLE: WIN OF THE DAY — celebrate a specific member win with profit proof. "
             "Example energy: 'I want to highlight @member's success... paid around $X, cashed out $Y... LETS STAY COOKING'"
         )
+    style_note = ""
+    if style_variant:
+        style_note = (
+            "\nSTYLE VARIANT: "
+            f"{style_variant.get('name')}\n"
+            f"- Direction: {style_variant.get('instruction')}\n"
+            f"- Emoji idea for this post: {style_variant.get('preferred_emoji')}\n"
+            "- Emoji is optional. Use no emoji if cleaner, or use one normal emoji when it fits better than an RS custom emoji."
+        )
     user = (
         f"{grounding}\n\n"
         f"NARRATIVE ANGLE:\n{story_angle}\n\n"
         f"SKELETON DRAFT:\n{skeleton.get('body_markdown')}\n\n"
         f"Target channel: {target_channel}\n"
         f"Write final post copy: ALL CAPS headline hook (1-2 emojis max), "
-        f"short body, urgency, waitlist CTA. ZERO URLs in the text.{wins_note}\n"
+        f"short body, urgency, waitlist CTA. ZERO URLs in the text.{wins_note}{style_note}\n"
         f"{extra_instructions}".strip()
     )
     copy, routing = _openai_chat(
@@ -402,6 +406,9 @@ def generate_marketing_copy(
         "wym_score": candidate.get("wym_score"),
         "deal_facts": candidate.get("deal_facts") or {},
         "story_angle": story_angle,
+        "style_variant": style_variant.get("name") or "",
+        "style_variant_instruction": style_variant.get("instruction") or "",
+        "preferred_emoji": style_variant.get("preferred_emoji") or "",
         "research_related_count": research_pack.get("related_count", 0),
         "research_source_files": research_pack.get("source_paths") or [],
         "memory_used": bool(memory),

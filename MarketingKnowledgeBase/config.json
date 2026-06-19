@@ -63,6 +63,7 @@
     "schedule": {
       "enabled": true,
       "timezone": "America/New_York",
+      "post_hours": [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
       "morning_hour": 9,
       "evening_hour": 22
     }
@@ -90,13 +91,150 @@
     "use_for_success_attachments": true,
     "note": "OpenAI vision reads Discord CDN proof screenshots from bot sync. No user-token CDP (MWDiscumBot owns user token)."
   },
+  "agent": {
+    "enabled": true,
+    "review_channel_id": 1517212561697673347,
+    "allowed_user_ids": [],
+    "allowed_role_ids": [876598078092754985],
+    "default_auto_publish_mode": "trusted_after_validation",
+    "max_revision_count": 8,
+    "model_by_stage": {
+      "extract": "gpt-4o-mini",
+      "classify": "gpt-4o-mini",
+      "draft": "gpt-4o",
+      "rewrite": "gpt-4o",
+      "critique": "gpt-5.5",
+      "repair": "gpt-5.5",
+      "final": "gpt-5.5",
+      "vision": "gpt-5.5"
+    },
+    "vision": {
+      "max_images": 4,
+      "download_fallback_enabled": false
+    }
+  },
+  "destinations": [
+    {
+      "destination_id": "discord_what_you_missed",
+      "platform": "discord",
+      "content_type": "what_you_missed",
+      "audience": "RS public/free server waitlist audience",
+      "format_rules": {
+        "plain_chat": true,
+        "allow_discord_markdown": true,
+        "allow_channel_mentions": true,
+        "allow_urls": false,
+        "max_length": 2000
+      },
+      "required_cta": "waitlist_channel",
+      "approval_policy": "trusted_after_validation",
+      "auto_publish_policy": "trusted_after_validation",
+      "tone_profile": "RS insider, direct, grounded, proof-first",
+      "publish_adapter": "discord"
+    },
+    {
+      "destination_id": "discord_review",
+      "platform": "discord",
+      "content_type": "review",
+      "audience": "internal RS review team",
+      "format_rules": {
+        "plain_chat": true,
+        "allow_urls": true,
+        "max_length": 2000
+      },
+      "required_cta": "",
+      "approval_policy": "manual_only",
+      "auto_publish_policy": "manual_only",
+      "tone_profile": "compact operational review",
+      "publish_adapter": "discord"
+    },
+    {
+      "destination_id": "discord_member_win",
+      "platform": "discord",
+      "content_type": "member_win",
+      "audience": "RS members and prospects",
+      "format_rules": {
+        "plain_chat": true,
+        "allow_urls": false,
+        "max_length": 2000
+      },
+      "required_cta": "waitlist_channel",
+      "approval_policy": "trusted_after_validation",
+      "auto_publish_policy": "trusted_after_validation",
+      "tone_profile": "celebratory but specific",
+      "publish_adapter": "discord"
+    },
+    {
+      "destination_id": "discord_announcement",
+      "platform": "discord",
+      "content_type": "announcement",
+      "audience": "RS Discord audience",
+      "format_rules": {
+        "plain_chat": true,
+        "allow_urls": true,
+        "max_length": 2000
+      },
+      "required_cta": "",
+      "approval_policy": "manual_only",
+      "auto_publish_policy": "manual_only",
+      "tone_profile": "clear and operational",
+      "publish_adapter": "discord"
+    },
+    {
+      "destination_id": "ghl_sms_campaign",
+      "platform": "ghl_sms",
+      "content_type": "sms_campaign",
+      "audience": "GHL contact segment",
+      "format_rules": {
+        "plain_text": true,
+        "allow_discord_markdown": false,
+        "allow_channel_mentions": false,
+        "allow_custom_emoji": false,
+        "max_length": 320
+      },
+      "required_cta": "configured_sms_cta",
+      "approval_policy": "dry_run_only",
+      "auto_publish_policy": "dry_run_only",
+      "tone_profile": "short, direct, compliant",
+      "publish_adapter": "draft_only"
+    },
+    {
+      "destination_id": "ghl_sms_followup",
+      "platform": "ghl_sms",
+      "content_type": "sms_followup",
+      "audience": "GHL follow-up segment",
+      "format_rules": {
+        "plain_text": true,
+        "allow_discord_markdown": false,
+        "allow_channel_mentions": false,
+        "allow_custom_emoji": false,
+        "max_length": 320
+      },
+      "required_cta": "configured_sms_cta",
+      "approval_policy": "dry_run_only",
+      "auto_publish_policy": "dry_run_only",
+      "tone_profile": "short, personal, compliant",
+      "publish_adapter": "draft_only"
+    }
+  ],
   "ai_writer": {
     "secrets_file": "config.secrets.json",
     "default_model": "auto",
     "models": {
       "fast": "gpt-4o-mini",
       "balanced": "gpt-4o",
-      "quality": "gpt-4.1"
+      "quality": "gpt-5.5",
+      "pro": "gpt-5.5-pro"
+    },
+    "models_by_stage": {
+      "extract": "gpt-4o-mini",
+      "classify": "gpt-4o-mini",
+      "draft": "gpt-4o",
+      "rewrite": "gpt-4o",
+      "critique": "gpt-5.5",
+      "repair": "gpt-5.5",
+      "final": "gpt-5.5",
+      "vision": "gpt-5.5"
     },
     "dm_sequence_messages_path": "../RSCheckerbot/messages.json"
   },

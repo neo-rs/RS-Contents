@@ -1,0 +1,9 @@
+[Unit]
+Description=Mirror World - Marketing posts hourly 8am-10pm America/New_York
+
+[Timer]
+OnCalendar=*-*-* 08..22:00:00 America/New_York
+Persistent=true
+
+[Install]
+WantedBy=timers.target

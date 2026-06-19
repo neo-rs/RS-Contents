@@ -1,0 +1,177 @@
+{
+  "guild_id": 876528050081251379,
+  "bot_config_dir": "RSAdminBot",
+  "storage": {
+    "data_dir": "data",
+    "max_total_bytes": 5242880,
+    "max_entries_per_channel": 25,
+    "max_entries_per_bucket": 150,
+    "monitoring_max_channels": 35,
+    "date_window_max_pages_per_channel": 40,
+    "retention_days_by_bucket": {
+      "success": 30,
+      "sneakers": 7,
+      "important": 7,
+      "important_instore": 7,
+      "important_trading_cards": 7,
+      "what_you_missed": 60,
+      "weekly_schedule": 14,
+      "daily_schedule": 14,
+      "monitoring": 3,
+      "chipotle": 5,
+      "full_send_info": 14,
+      "full_send_monitor": 7,
+      "staff_wins": 30
+    },
+    "max_story_candidates": 40,
+    "max_post_queue_items": 20
+  },
+  "what_you_missed_sourcing": {
+    "eligible_buckets": [
+      "full_send_info",
+      "important",
+      "important_instore",
+      "important_trading_cards",
+      "daily_schedule",
+      "weekly_schedule",
+      "success"
+    ],
+    "exclude_buckets": ["sneakers", "full_send_monitor", "monitoring", "chipotle", "staff_wins"],
+    "bucket_score_boost": {
+      "full_send_info": 10,
+      "important": 8,
+      "important_instore": 8,
+      "important_trading_cards": 8,
+      "daily_schedule": 6,
+      "weekly_schedule": 6,
+      "success": 5,
+      "staff_wins": 12
+    },
+    "wins_fallback_bucket": "staff_wins"
+  },
+  "what_you_missed_channel_id": 1310420229129764924,
+  "publishing": {
+    "waitlist_channel_id": 1155729485048594483,
+    "waitlist_channel_note": "# ✅ | waitlist (free server member CTA)",
+    "production_guild_id": 876528050081251379,
+    "neo_test_guild_id": 1451275225512546497,
+    "review_guild_id": 876528050081251379,
+    "review_channel_id": 1517212561697673347,
+    "review_approval_role_id": 876598078092754985,
+    "neo_test_preview_channel_id": 1516675219660472371,
+    "message_style": "plain_chat",
+    "schedule": {
+      "enabled": true,
+      "timezone": "America/New_York",
+      "morning_hour": 9,
+      "evening_hour": 22
+    }
+  },
+  "feedback": {
+    "enabled": true,
+    "review_channel_id": 1517212561697673347,
+    "review_guild_id": 876528050081251379,
+    "approval_role_id": 876598078092754985,
+    "approve_emoji": "✅",
+    "reject_emoji": "❌",
+    "good_examples_channel_id": 1310420229129764924,
+    "good_example_reactor_user_ids": [744705253890326599, 971528709876113478],
+    "max_review_messages": 50,
+    "max_example_scan_messages": 35,
+    "max_examples": 12
+  },
+  "discord_logging": {
+    "enabled": true,
+    "neo_test_guild_id": 1451275225512546497,
+    "knowledge_data_logs_channel_id": 1517115718280417401
+  },
+  "vision": {
+    "enabled": true,
+    "use_for_success_attachments": true,
+    "note": "OpenAI vision reads Discord CDN proof screenshots from bot sync. No user-token CDP (MWDiscumBot owns user token)."
+  },
+  "ai_writer": {
+    "secrets_file": "config.secrets.json",
+    "default_model": "auto",
+    "models": {
+      "fast": "gpt-4o-mini",
+      "balanced": "gpt-4o",
+      "quality": "gpt-4.1"
+    },
+    "dm_sequence_messages_path": "../RSCheckerbot/messages.json"
+  },
+  "sources": {
+    "success": {
+      "label": "Member success hauls",
+      "channel_ids": [
+        876628405645369344,
+        1359314655797055691,
+        1310391026606669844,
+        1359314770804867163,
+        1366833116123234354,
+        1452226578053464177
+      ]
+    },
+    "sneakers": {
+      "label": "Sneaker leads and deals",
+      "category_id": 1351327970463060088,
+      "extra_channel_ids": [878305076073087026]
+    },
+    "important": {
+      "label": "Online important deals and promos",
+      "channel_ids": [
+        1255590577144201358,
+        1400615121415438446,
+        1344779023577776148,
+        1461434068804829372,
+        1400616066060783646,
+        1312134455506239508
+      ]
+    },
+    "important_instore": {
+      "label": "In-store important deals",
+      "channel_ids": [1344378714368118794]
+    },
+    "important_trading_cards": {
+      "label": "Trading cards / Pokemon important",
+      "channel_ids": [1499559757873156296]
+    },
+    "weekly_schedule": {
+      "label": "Weekly upcoming drops",
+      "category_id": 1400619782692409404
+    },
+    "daily_schedule": {
+      "label": "Daily release schedule",
+      "category_id": 1313260017989713981,
+      "extra_channel_ids": [1313575695267663893]
+    },
+    "monitoring": {
+      "label": "Live restock monitor alerts",
+      "category_ids": [
+        1350953333069713528,
+        1351327970463060088,
+        1411757054908960819
+      ]
+    },
+    "chipotle": {
+      "label": "Food promo code drops",
+      "channel_ids": [1380283269429596350]
+    },
+    "what_you_missed": {
+      "label": "Staff marketing posts (what-you-missed)",
+      "channel_ids": [1310420229129764924]
+    },
+    "full_send_info": {
+      "label": "Full Send flip writeups",
+      "channel_name_contains": ["full-send-info"]
+    },
+    "full_send_monitor": {
+      "label": "Full Send monitor hits",
+      "channel_name_contains": ["full-send-monitor"]
+    },
+    "staff_wins": {
+      "label": "Staff WIN OF THE DAY highlights",
+      "channel_ids": [1445628298439954564]
+    }
+  }
+}

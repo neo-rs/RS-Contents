@@ -1,0 +1,12 @@
+[Unit]
+Description=Mirror World - Marketing daily what-you-missed post (oneshot)
+
+[Service]
+Type=oneshot
+User=rsadmin
+WorkingDirectory=/home/rsadmin/bots/mirror-world
+ExecStart=/home/rsadmin/bots/mirror-world/.venv/bin/python -m MarketingKnowledgeBase.run_daily_post
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

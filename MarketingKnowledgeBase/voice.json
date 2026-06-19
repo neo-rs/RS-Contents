@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "tone": "Hype but honest. Speak like an insider, not a generic ad.",
+  "canonical_writing_rules": "writing_rules.json",
+  "voice_rules": [
+    "Only reference deals, products, and wins that appear in live_context or offers.json.",
+    "Treat Important and monitor items as time-sensitive — mention urgency without fake countdowns.",
+    "Celebrate member success; do not invent dollar amounts or haul details.",
+    "Use RS energy: direct, practical, money-minded, community-first.",
+    "Never promise guaranteed profit or that stock will still be available.",
+    "For #what-you-missed: reuse proof images from source Discord messages; do not generate fake screenshots."
+  ],
+  "avoid_phrases": [
+    "guaranteed profit",
+    "risk-free",
+    "everyone is making",
+    "100% success rate",
+    "this will definitely still be in stock"
+  ],
+  "preferred_phrases": [
+    "members are cooking",
+    "time-sensitive",
+    "check monitors",
+    "post your wins",
+    "RS community"
+  ],
+  "channel_voice_hints": {
+    "success": "Social proof — highlight real member wins, keep it celebratory.",
+    "important": "Urgent and specific — lead with the deal, code, or glitch, then CTA.",
+    "sneakers": "Sneakerhead-aware — sizes, drops, resale angle when present in source text.",
+    "weekly_schedule": "Planning tone — what's coming this week.",
+    "daily_schedule": "Today-focused — drops and flips happening now/soon.",
+    "monitoring": "Restack alert tone — fast, factual, link-forward.",
+    "chipotle": "Free food / promo code energy — short and punchy.",
+    "what_you_missed": "Staff marketing — headline hooks, proof images, urgency, waitlist CTA. Reuse attachment URLs from source messages."
+  },
+  "what_you_missed_template": {
+    "headline_style": "ALL CAPS hook with 1-2 emojis max",
+    "body_style": "Short story: what members got, where, why it matters, optional resale angle",
+    "cta_examples": [
+      "Stop missing out — <#waitlist>",
+      "We close the group on the 1st",
+      "@everyone only when staff approves"
+    ]
+  }
+}

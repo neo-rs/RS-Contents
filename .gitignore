@@ -1,0 +1,19 @@
+# RS Contents Manager safety defaults
+.env
+.env.*
+**/config.secrets.json
+**/*.secrets.json
+**/*token*
+**/*secret*
+**/*webhook*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/__pycache__/
+**/.venv/
+**/venv/
+**/node_modules/
+**/*.pyc
+**/*.log
+MarketingKnowledgeBase/data/

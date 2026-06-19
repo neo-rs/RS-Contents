@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "tone": "Casual RS insider. Hype but honest. Never corporate or generic AI marketing.",
+  "rs_emojis": {
+    "checklist_bullet": "<:rscheck:1352700145845801071>",
+    "hype": "<a:rshype:910339563132682250>",
+    "money": "<a:rsmoneyrain:910339595797925898>",
+    "love": "<a:rsllove:1247632675766931558>",
+    "knock": "<a:rslknock:1247632729948946472>"
+  },
+  "emoji_rules": [
+    "Prefer RS custom emojis over unicode emoji.",
+    "Max 1 RS animated emoji per message (headline OR CTA, not both).",
+    "Max 1 unicode emoji per message (optional: rocket on CTA only).",
+    "Use <:rscheck:1352700145845801071> for feature/benefit bullet lists (day_1 welcome)."
+  ],
+  "link_rules": [
+    "Wrap every bare URL in angle brackets: <https://example.com> (Discord suppresses embeds) — DM sequence only.",
+    "Markdown links stay as [label](url) — do not double-wrap the url inside parentheses — DM sequence only.",
+    "DM sequence CTA must use exactly [JOIN THE WAITLIST NOW]({join_url}) or [JOIN THE GROUP NOW]({join_url}).",
+    "Never use placeholder links: example.com, your-link-here, amzn.to/..., bit.ly/..., or invented URLs.",
+    "Do not paste raw Amazon/Walmart/Target merchant URLs in DM copy — members get Mavely-linked deals inside the group.",
+    "#what-you-missed / marketing_copy: ZERO URLs in output. No http, no zephr.app, no message links, no affiliate links, no markdown links.",
+    "Every #what-you-missed post MUST end with a waitlist CTA that includes the configured waitlist channel mention <#waitlist_channel_id> (exact format)."
+  ],
+  "what_you_missed_rules": [
+    "This is hype staff marketing — what members missed from admin deal posts, not monitor bot alerts.",
+    "Source from: staff wins, full-send-info, Important (online/in-store/trading cards), daily/weekly schedules, member success.",
+    "Never mention zephr, FSR, quicktask, ATC, restock monitors, or bot usernames like shop.complex.com.",
+    "No URLs anywhere in the post text — describe the deal/product in plain words only.",
+    "If the source is staff_wins bucket, use WIN OF THE DAY energy: highlight the member win, profit, and community hype.",
+    "Monitoring channels are reference only — never repost raw monitor formatting."
+  ],
+  "waitlist_cta": {
+    "required": true,
+    "examples": [
+      "Want the next alert before everyone else sees it? Waitlist is here: <#waitlist_channel_id>",
+      "If you want these plays in real time, join the waitlist: <#waitlist_channel_id>",
+      "Missed this one? Do not miss the next drop: <#waitlist_channel_id>",
+      "Need the full alerts, proof, and timing? Get on the waitlist: <#waitlist_channel_id>",
+      "This is why timing matters. Waitlist for full access: <#waitlist_channel_id>"
+    ]
+  },
+  "channel_reference_rules": [
+    "Never paste raw Discord channel display names with emoji prefixes (e.g. ❗┃deals-important).",
+    "Use channel mentions only: <#channel_id> (Discord resolves the name).",
+    "For source context, say 'our deal alerts' or 'Important' instead of copying the channel label.",
+    "Success proof: say 'member success channels' or use <#channel_id> if you have the id."
+  ],
+  "post_style_rules": [
+    "Publish as plain chat content, not embeds.",
+    "Attach proof images as file uploads when available (reuse_assets URLs).",
+    "Headline can use **bold** in content; no embed-only formatting."
+  ],
+  "mavely_affiliate": {
+    "canonical_owner": "RSForwarder/affiliate_rewriter.py",
+    "reformatter_channel_id": "1467585427589435472",
+    "reformatter_channel_name": "reformatter",
+    "note": "Live merchant links in RS are rewritten to Mavely affiliate via RSForwarder on Oracle and Neo test server reformatter channel. AI copy must NOT invent mavely.app.link URLs — only reference deals from grounding or omit the link.",
+    "skip_affiliate_domains": ["ebay.com", "stockx.com"]
+  },
+  "formatting_rules": [
+    "Never use em dashes (—) or en dashes (–). Use commas, periods, or hyphens (-) instead.",
+    "Short lines. Discord embed friendly. No walls of text.",
+    "Headlines: # **ALL CAPS HOOK** then 1 RS or unicode emoji max.",
+    "Use _italic_ for emphasis sparingly; **bold** for prices and key terms.",
+    "No bullet lists in DM days except day_1 welcome (use rscheck bullets)."
+  ],
+  "grounding_rules": [
+    "Only reference deals, products, prices, and wins present in the grounding context.",
+    "Never invent dollar amounts, product names, glitches, or member stories.",
+    "Never promise guaranteed profit or that stock will still be available.",
+    "Do not reference stale examples: iPhone $99, Chipotle glitch, Walmart Lego 90% off unless they appear in grounding."
+  ],
+  "avoid_phrases": [
+    "guaranteed profit",
+    "check the full size run",
+    "zephr.app",
+    "quicktask",
+    "full size run",
+    "FSR",
+    "restock monitor",
+    "everyone is making",
+    "100% success rate",
+    "this will definitely still be in stock",
+    "don't miss out on these opportunities",
+    "unlock full access",
+    "in today's fast-paced world",
+    "game-changer",
+    "dive in",
+    "leverage",
+    "utilize",
+    "delve",
+    "tapestry",
+    "testament",
+    "landscape",
+    "robust",
+    "comprehensive",
+    "seamless",
+    "cutting-edge",
+    "plugged-in",
+    "savvy cook",
+    "elevate your",
+    "don't miss out",
+    "level up",
+    "don't miss your shot"
+  ],
+  "avoid_characters": ["—", "–"],
+  "preferred_phrases": [
+    "members are cooking",
+    "time-sensitive",
+    "check Important",
+    "post your wins",
+    "RS community",
+    "don't sleep",
+    "while it's live"
+  ],
+  "context_hints": {
+    "dm_sequence": "Free-server nurture DMs. Social proof + FOMO. CTA is always {join_url}. No merchant product links.",
+    "what_you_missed": "Staff marketing channel. Hype recap of admin deal posts members missed. ZERO URLs in text. Plain chat + image attachment. WIN OF THE DAY tone when using staff wins.",
+    "marketing_copy": "Same as what_you_missed. No URLs in output. Proof images attach as files only — never paste image URLs in text."
+  }
+}

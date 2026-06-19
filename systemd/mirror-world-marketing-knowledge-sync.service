@@ -1,0 +1,14 @@
+[Unit]
+Description=Mirror World - Marketing knowledge base Discord sync (oneshot)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rsadmin
+WorkingDirectory=/home/rsadmin/bots/mirror-world
+ExecStart=/home/rsadmin/bots/mirror-world/.venv/bin/python -m MarketingKnowledgeBase.sync --quiet --scheduled-current-archive --date-window-max-pages 40
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

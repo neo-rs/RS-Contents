@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "updated_at": null,
+  "brand": "Reselling Secrets",
+  "guild_id": 876528050081251379,
+  "products": [
+    {
+      "id": "rs-membership",
+      "name": "Reselling Secrets Membership",
+      "summary": "Private Discord community with in-store/online leads, monitors, schedules, and success culture.",
+      "audience": "Resellers looking for actionable flips, leads, and community wins.",
+      "do_not_claim": [
+        "Guaranteed profit on any single deal",
+        "Inventory will still be in stock when you arrive",
+        "Prices or promos lasting beyond posted window"
+      ]
+    }
+  ],
+  "value_props": [
+    "Real member success posts with haul screenshots",
+    "Time-sensitive important channels for glitches, promos, and strat",
+    "Daily and weekly drop schedules across sneakers, retail, and flips",
+    "Store monitor restock alerts",
+    "Sneaker-specific lead coverage"
+  ],
+  "ctas": [
+    "Join before the deal dies",
+    "Check Important channels for active cooks",
+    "Post wins in Success to earn points"
+  ]
+}

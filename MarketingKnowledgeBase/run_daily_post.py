@@ -13,11 +13,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from MarketingKnowledgeBase.post_publisher import publish_marketing_draft
-from MarketingKnowledgeBase.discord_log import post_marketing_generation_audit
-from MarketingKnowledgeBase.feedback import record_review_post
-from MarketingKnowledgeBase.post_history import record_story_usage
-from MarketingKnowledgeBase.what_you_missed_post import build_what_you_missed_post
+from MarketingKnowledgeBase.agent_review_post import generate_and_post_agent_review
 
 
 def _load_json(path: Path) -> dict:
@@ -86,43 +82,32 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"skipped": True, "reason": "slot already posted", "slot": key}))
         return 0
 
-    waitlist_id = int(pub.get("waitlist_channel_id") or 0)
-    if waitlist_id <= 0:
-        raise SystemExit("publishing.waitlist_channel_id missing")
-
     if args.production:
         channel_id = int(cfg.get("what_you_missed_channel_id") or 0)
     else:
         channel_id = int(pub.get("review_channel_id") or pub.get("neo_test_preview_channel_id") or 0)
 
-    draft = build_what_you_missed_post(waitlist_channel_id=waitlist_id)
-    result: dict = {"slot": key, "channel_id": channel_id, "draft": draft}
-    posted = None
+    result: dict = {"slot": key, "channel_id": channel_id}
     if not args.dry_run:
-        posted = publish_marketing_draft(draft, channel_id=channel_id, dry_run=False)
-        result["posted"] = posted
-        if not args.production:
-            record_review_post(posted=posted, draft=draft, slot=key, channel_id=channel_id)
-        history_row = record_story_usage(
-            draft=draft,
-            mode="scheduled_production" if args.production else "scheduled_review",
-            channel_id=channel_id,
-            posted=posted,
+        result.update(
+            generate_and_post_agent_review(
+                requested_by="scheduled_daily_post",
+                trigger="scheduled_production" if args.production else "scheduled_review",
+                channel_id=channel_id,
+                post_controls=not bool(args.production),
+                record_history=True,
+                audit=True,
+                slot=key,
+            )
         )
-        draft["post_history_recorded"] = True
-        result["post_history"] = history_row
         state["last_slot"] = key
         state["last_posted_at"] = now.isoformat()
-        state["last_message_url"] = posted.get("url")
+        state["last_message_url"] = result.get("review_message_url")
+        state["last_run_id"] = result.get("run_id")
         _save_json(state_path, state)
-
-    audit_channel_id = int(pub.get("neo_test_preview_channel_id") or 0)
-    if audit_channel_id > 0:
-        try:
-            post_marketing_generation_audit(channel_id=audit_channel_id, draft=draft, posted=posted)
-            result["audit_log"] = {"channel_id": audit_channel_id, "posted": True}
-        except Exception as exc:
-            result["audit_log"] = {"channel_id": audit_channel_id, "posted": False, "error": str(exc)[:300]}
+    else:
+        result["dry_run"] = True
+        result["would_use_agent_review_flow"] = True
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

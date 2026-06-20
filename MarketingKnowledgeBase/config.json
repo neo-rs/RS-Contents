@@ -33,8 +33,7 @@
       "important_instore",
       "important_trading_cards",
       "daily_schedule",
-      "weekly_schedule",
-      "success"
+      "weekly_schedule"
     ],
     "exclude_buckets": [
       "sneakers",
@@ -50,7 +49,6 @@
       "important_trading_cards": 8,
       "daily_schedule": 6,
       "weekly_schedule": 6,
-      "success": 5,
       "staff_wins": 12
     },
     "wins_fallback_bucket": "staff_wins"
@@ -136,7 +134,23 @@
       "memory_promotion_enabled": false,
       "token_budget_enabled": true,
       "webhook_username": "Reese",
-      "note": "RSAdminBot listens to this channel through Discord Gateway; replies are sent through a webhook stored in config.secrets.json."
+      "note": "Standalone ReeseBot listens to this channel through Discord Gateway and replies as the Reese bot account. Webhook remains fallback-only."
+    },
+    "reese_bot": {
+      "enabled": true,
+      "disable_rsadminbot_chat_bridge": true,
+      "token_secret_keys": [
+        "reese_bot_token",
+        "discord_bot_token",
+        "bot_token"
+      ],
+      "bot_owned_channel_ids": [
+        1517212561697673347,
+        1517746409112080404
+      ],
+      "fallback_to_webhook": true,
+      "controls_as_bot": false,
+      "note": "Channels in bot_owned_channel_ids should send through the Reese bot token first so Discord shows Reese as the sender/typing user."
     },
     "webhook_profile": {
       "username": "Reese",

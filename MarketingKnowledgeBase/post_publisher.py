@@ -33,6 +33,26 @@ def _publishing_config() -> Dict[str, Any]:
     return pub if isinstance(pub, dict) else {}
 
 
+def _agent_config() -> Dict[str, Any]:
+    cfg = _read_json(_BASE / "config.json") or {}
+    agent = cfg.get("agent")
+    return agent if isinstance(agent, dict) else {}
+
+
+def _prefer_reese_bot_for_channel(channel_id: int) -> bool:
+    agent = _agent_config()
+    bot_cfg = agent.get("reese_bot") or {}
+    if not isinstance(bot_cfg, dict) or not bool(bot_cfg.get("enabled", False)):
+        return False
+    owned = {str(x) for x in (bot_cfg.get("bot_owned_channel_ids") or [])}
+    return str(int(channel_id or 0)) in owned
+
+
+def _source_message_id_from_link(link: str) -> str:
+    text = str(link or "").rstrip("/")
+    return text.rsplit("/", 1)[-1] if "/" in text else ""
+
+
 def _guild_id_for_channel(channel_id: int) -> int:
     pub = _publishing_config()
     review = int(pub.get("review_channel_id") or 0)
@@ -164,13 +184,24 @@ def publish_marketing_draft(
     if not content:
         raise ValueError("Draft has no body_markdown/description.")
 
+    draft_source_id = str(draft.get("source_message_id") or _source_message_id_from_link(str(draft.get("source_message_link") or "")) or "")
     assets = draft.get("reuse_assets") or []
-    image_urls = [str(a.get("url") or "").strip() for a in assets if a.get("url")]
+    filtered_assets = []
+    for asset in assets:
+        if not isinstance(asset, dict) or not asset.get("url"):
+            continue
+        asset_source_id = str(asset.get("source_message_id") or _source_message_id_from_link(str(asset.get("source_message_link") or "")) or "")
+        if draft_source_id and asset_source_id and asset_source_id != draft_source_id:
+            continue
+        filtered_assets.append(asset)
+    image_urls = [str(a.get("url") or "").strip() for a in filtered_assets if a.get("url")]
 
     preview = {
         "channel_id": channel_id,
         "content": content,
         "image_urls": image_urls,
+        "asset_count_before_filter": len(assets),
+        "asset_count_after_filter": len(filtered_assets),
         "message_style": "plain_chat",
         "dry_run": dry_run,
         "source_message_link": draft.get("source_message_link"),
@@ -178,10 +209,22 @@ def publish_marketing_draft(
     if dry_run:
         return preview
 
-    webhook = _webhook_for_channel(channel_id)
     token = discord_bot_token() or ""
-    if webhook:
+    webhook = _webhook_for_channel(channel_id)
+    used_webhook = False
+    if _prefer_reese_bot_for_channel(channel_id):
+        if not token:
+            if not webhook:
+                raise RuntimeError("Missing Reese Discord bot token for bot-owned channel publish.")
+            sent = _post_multipart(url=webhook, content=content, image_urls=image_urls)
+            used_webhook = True
+        else:
+            url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+            headers = {"Authorization": f"Bot {token}"}
+            sent = _post_multipart(url=url, content=content, image_urls=image_urls, headers=headers)
+    elif webhook:
         sent = _post_multipart(url=webhook, content=content, image_urls=image_urls)
+        used_webhook = True
     else:
         if not token:
             raise RuntimeError("Missing Discord bot token for publish.")
@@ -197,7 +240,8 @@ def publish_marketing_draft(
         "message_id": mid,
         "channel_id": channel_id,
         "message_style": "plain_chat",
-        "used_webhook": bool(webhook),
+        "used_webhook": used_webhook,
+        "used_reese_bot": bool(_prefer_reese_bot_for_channel(channel_id) and token and not used_webhook),
         "review_reactions_added": review_reactions_added,
         "review_reaction_details": getattr(_maybe_add_review_reactions, "last_details", []),
         "url": f"https://discord.com/channels/{guild_id}/{channel_id}/{mid}" if mid else None,

@@ -65,6 +65,22 @@ def _keywords(text: str) -> set[str]:
     return words
 
 
+def _searchable_text(row: Dict[str, Any]) -> str:
+    """Include vision/OCR summaries so proof screenshots can match earlier lead posts."""
+    parts = [
+        str(row.get("text") or ""),
+        str(row.get("vision_summary") or ""),
+        str(row.get("deal_facts") or ""),
+        str(row.get("headline_hints") or ""),
+    ]
+    for key in ("attachments", "embed_images"):
+        for item in row.get(key) or []:
+            if isinstance(item, dict):
+                parts.append(str(item.get("filename") or ""))
+                parts.append(str(item.get("description") or ""))
+    return "\n".join(parts)
+
+
 def _iter_entries(doc: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     for bucket, payload in (doc.get("buckets") or {}).items():
         if not isinstance(payload, dict):
@@ -101,7 +117,7 @@ def build_research_pack(
     target_bucket = str(candidate.get("bucket") or "")
     target_channel = str(candidate.get("channel_id") or "")
     target_ts = _parse_ts(candidate.get("posted_at"))
-    target_words = _keywords(str(candidate.get("text") or ""))
+    target_words = _keywords(_searchable_text(candidate))
 
     scored: Dict[str, Dict[str, Any]] = {}
     source_paths: set[str] = set()
@@ -115,7 +131,7 @@ def build_research_pack(
                 score += 4
             if target_channel and str(row.get("channel_id") or "") == target_channel:
                 score += 4
-            overlap = target_words & _keywords(str(row.get("text") or ""))
+            overlap = target_words & _keywords(_searchable_text(row))
             score += min(len(overlap), 5)
             row_ts = _parse_ts(row.get("posted_at"))
             if target_ts != datetime.min.replace(tzinfo=timezone.utc) and row_ts != datetime.min.replace(tzinfo=timezone.utc):
@@ -165,6 +181,7 @@ def research_prompt(pack: Dict[str, Any], *, max_chars: int = 2200) -> str:
                     f"- score={row.get('_research_score')} bucket={row.get('bucket')} channel={ch_ref} posted_at={row.get('posted_at')}",
                     f"  overlap={', '.join(row.get('_overlap') or [])}",
                     f"  text={_clean(str(row.get('text') or ''))}",
+                    f"  deal_facts={_clean(str(row.get('deal_facts') or {}), 500)}",
                 ]
             )
         )

@@ -11,6 +11,10 @@ URL_RE = re.compile(r"https?://\S+", re.I)
 MONEY_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d{2})?")
 LIMITED_RE = re.compile(r"\b(limited spots?|spots? left|only \d+ spots?|last chance|closing soon)\b", re.I)
 PROFIT_RE = re.compile(r"\b(profit|made|cashed out|sold for|resale|resell|market value)\b", re.I)
+SOURCE_TERM_RE = re.compile(
+    r"\b(polymarket|amazon|walmart|target|pokemon|pokémon|jurassic|amc|nike|stockx|ebay|gamestop|costco|best buy|microcenter)\b",
+    re.I,
+)
 
 
 def extract_claims(text: str) -> List[Dict[str, Any]]:
@@ -44,6 +48,21 @@ def extract_claims(text: str) -> List[Dict[str, Any]]:
             {
                 "claim_text": PROFIT_RE.search(text or "").group(0),
                 "claim_type": "profit_or_resale",
+                "source_type": "",
+                "source_id": "",
+                "confidence": "unknown",
+                "supported": False,
+                "needs_human_review": True,
+            }
+        )
+    for match in SOURCE_TERM_RE.finditer(text or ""):
+        term = match.group(1)
+        if term.lower() in {"rs"}:
+            continue
+        claims.append(
+            {
+                "claim_text": term,
+                "claim_type": "source_specific_term",
                 "source_type": "",
                 "source_id": "",
                 "confidence": "unknown",

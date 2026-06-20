@@ -186,6 +186,21 @@ def critique_content(
     story = get_story_context(story_id=story_id)["story"]
     destination = get_destination(destination_id)
     offers = _read_base_json("offers.json", {})
+    research_pack = build_research_pack(story)
+    if research_pack.get("related"):
+        offers = {
+            **offers,
+            "related_source_context": [
+                {
+                    "bucket": row.get("bucket"),
+                    "channel_id": row.get("channel_id"),
+                    "posted_at": row.get("posted_at"),
+                    "text": row.get("text"),
+                    "deal_facts": row.get("deal_facts") or {},
+                }
+                for row in (research_pack.get("related") or [])[:6]
+            ],
+        }
     return validate_structured_draft(
         draft,
         destination=destination,

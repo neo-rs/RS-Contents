@@ -39,6 +39,21 @@ def _parse_json_object(text: str) -> Dict[str, Any]:
     return {}
 
 
+def _vision_from_tool_results(tool_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    for call in reversed(tool_results):
+        if call.get("name") != "describe_images":
+            continue
+        output = call.get("output") or {}
+        if not isinstance(output, dict) or not output.get("ok"):
+            continue
+        result = output.get("result") or {}
+        if isinstance(result, dict) and result.get("ok") and isinstance(result.get("result"), dict):
+            return result.get("result") or {}
+        if isinstance(result, dict):
+            return result
+    return {}
+
+
 def _instructions(*, workflow_type: str, destination_id: str, mode: str) -> str:
     destination = get_destination(destination_id)
     memory = relevant_memory_prompt(
@@ -158,6 +173,24 @@ def run_tool_calling_agent(
 
     draft = parsed.get("draft") if isinstance(parsed.get("draft"), dict) else {}
     validation = parsed.get("validation") if isinstance(parsed.get("validation"), dict) else {}
+    vision = parsed.get("vision") if isinstance(parsed.get("vision"), dict) else {}
+    if not vision:
+        vision = _vision_from_tool_results(tool_results)
+    if draft:
+        local_validation = critique_content(
+            draft=draft,
+            story_id=story_id,
+            destination_id=destination_id,
+            vision=vision,
+        )
+        validation = local_validation
+        parsed["validation"] = validation
+        draft["claims"] = validation.get("claims") or []
+        draft["unsupported_claims"] = validation.get("unsupported_claims") or []
+        draft["validation_status"] = validation.get("validation_status")
+        parsed["draft"] = draft
+        if vision:
+            parsed["vision"] = vision
     if draft:
         append_draft(load_run(str(run.get("run_id"))), draft)
     if validation:

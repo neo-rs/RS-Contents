@@ -13,6 +13,27 @@ from MarketingKnowledgeBase.secrets import discord_bot_token
 DISCORD_API = "https://discord.com/api/v10"
 
 
+def _load_config() -> Dict[str, Any]:
+    try:
+        from pathlib import Path
+
+        return json.loads((Path(__file__).resolve().parent / "config.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _prefer_reese_bot_for_channel(channel_id: int) -> bool:
+    cfg = _load_config()
+    agent = cfg.get("agent") or {}
+    bot_cfg = agent.get("reese_bot") or {}
+    if not isinstance(bot_cfg, dict) or not bool(bot_cfg.get("enabled", False)):
+        return False
+    if not bool(bot_cfg.get("controls_as_bot", False)):
+        return False
+    owned = {str(x) for x in (bot_cfg.get("bot_owned_channel_ids") or [])}
+    return str(int(channel_id or 0)) in owned
+
+
 def _webhook_for_channel(channel_id: int) -> str:
     try:
         from MarketingKnowledgeBase.secrets import load_secrets
@@ -25,12 +46,7 @@ def _webhook_for_channel(channel_id: int) -> str:
         url = str(by_channel.get(str(channel_id)) or "").strip()
         if url.startswith("https://discord.com/api/webhooks/"):
             return url
-    try:
-        from pathlib import Path
-
-        cfg = json.loads((Path(__file__).resolve().parent / "config.json").read_text(encoding="utf-8"))
-    except Exception:
-        cfg = {}
+    cfg = _load_config()
     pub = cfg.get("publishing") or {}
     preview = int(pub.get("neo_test_preview_channel_id") or 0)
     if int(channel_id) == preview:
@@ -42,14 +58,21 @@ def _webhook_for_channel(channel_id: int) -> str:
 
 def _post_discord_payload(*, channel_id: int, payload: Dict[str, Any], label: str) -> None:
     webhook = _webhook_for_channel(channel_id)
-    if webhook:
+    token = discord_bot_token()
+    if _prefer_reese_bot_for_channel(channel_id) and token and int(channel_id or 0) > 0:
+        resp = requests.post(
+            f"{DISCORD_API}/channels/{int(channel_id)}/messages",
+            json=payload,
+            headers={"Authorization": f"Bot {token}", "Content-Type": "application/json"},
+            timeout=20,
+        )
+    elif webhook:
         resp = requests.post(
             webhook,
             json=payload,
             timeout=20,
         )
     else:
-        token = discord_bot_token()
         if not token or int(channel_id or 0) <= 0:
             return
         resp = requests.post(

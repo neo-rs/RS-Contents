@@ -1,7 +1,7 @@
 """Context tools for Reese live chat.
 
 These tools use local synced knowledge and optional Discord.py context passed by
-RSAdminBot. They do not call external live market, ticket, or GHL send APIs.
+ReeseBot or RSAdminBot. They do not call external live market, ticket, or GHL send APIs.
 """
 
 from __future__ import annotations
@@ -20,6 +20,12 @@ REPO = BASE.parent
 LIVE_CONTEXT = DATA / "live_context.json"
 STORY_CANDIDATES = DATA / "story_candidates.json"
 APPROVED_EXAMPLES = DATA / "approved_examples.json"
+CHAT_STATE = DATA / "agent_chat_sessions.json"
+TOKEN_USAGE = DATA / "agent_token_usage.json"
+AGENT_MEMORY = DATA / "agent_memory.json"
+POST_HISTORY = DATA / "post_history.json"
+REVIEW_POSTS = DATA / "review_posts.json"
+AGENT_RUNS = DATA / "agent_runs"
 MESSAGE_LINK_RE = re.compile(
     r"(?:https?://)?(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d{15,25})/(\d{15,25})/(\d{15,25})"
 )
@@ -328,6 +334,8 @@ def search_archive_content(*, query: str = "", max_results: int = 6) -> Dict[str
     """Search current live data plus latest daily/weekly story archives."""
 
     terms = _tokens(query)
+    specific_terms = _archive_query_terms(query)
+    excluded = _excluded_terms(query)
     rows: List[Dict[str, Any]] = []
     sources_checked: List[Dict[str, Any]] = []
     latest_sync = ""
@@ -359,18 +367,28 @@ def search_archive_content(*, query: str = "", max_results: int = 6) -> Dict[str
                 json.dumps(row.get("deal_facts") or {}, ensure_ascii=False),
             ]
         ).lower()
-        query_boost = sum(3 for term in terms if term in hay)
+        query_matches = [term for term in specific_terms if term in hay]
+        query_boost = sum(3 for term in terms if term in hay) + (12 * len(query_matches))
+        excluded_matches = [term for term in excluded if term in hay]
+        exclude_penalty = 100 if excluded_matches else 0
         image_boost = 4 if row.get("primary_image_url") else 0
         admin_boost = 3 if row.get("bucket") in {"important", "important_instore", "important_trading_cards", "full_send_info"} else 0
         recency_boost = max(0, 6 - int((datetime.now(timezone.utc) - _parse_ts(row.get("posted_at"))).total_seconds() // 43200)) if row.get("posted_at") else 0
-        row["archive_rank_score"] = int(row.get("score") or 0) + query_boost + image_boost + admin_boost + recency_boost
+        row["excluded_by_query"] = excluded_matches
+        row["query_matches"] = query_matches
+        row["archive_rank_score"] = int(row.get("score") or 0) + query_boost + image_boost + admin_boost + recency_boost - exclude_penalty
         prev = by_message.get(mid)
         if not prev or int(row.get("archive_rank_score") or 0) > int(prev.get("archive_rank_score") or 0):
             by_message[mid] = row
 
     ranked = sorted(
         by_message.values(),
-        key=lambda row: (int(row.get("archive_rank_score") or 0), _parse_ts(row.get("posted_at"))),
+        key=lambda row: (
+            bool(row.get("query_matches")) if specific_terms else True,
+            not bool(row.get("excluded_by_query")),
+            int(row.get("archive_rank_score") or 0),
+            _parse_ts(row.get("posted_at")),
+        ),
         reverse=True,
     )
     cap = max(1, min(12, int(max_results or 6)))
@@ -379,6 +397,9 @@ def search_archive_content(*, query: str = "", max_results: int = 6) -> Dict[str
         "query": query,
         "latest_sync_at": latest_sync,
         "sources_checked": sources_checked,
+        "specific_terms": specific_terms,
+        "excluded_terms": excluded,
+        "matched_candidate_count": sum(1 for row in ranked if row.get("query_matches")),
         "candidates": ranked[:cap],
         "note": "Use primary_image_url from the selected candidate when drafting visual content.",
     }
@@ -435,6 +456,54 @@ def inspect_linked_message(
 
 def _tokens(query: str) -> List[str]:
     return [t for t in re.findall(r"[a-z0-9$.\-]+", str(query or "").lower()) if len(t) >= 3]
+
+
+def _excluded_terms(query: str) -> List[str]:
+    terms: List[str] = []
+    text = str(query or "").lower()
+    for pattern in (
+        r"\bno more\s+([a-z0-9][a-z0-9\-]{2,})",
+        r"\bnot\s+([a-z0-9][a-z0-9\-]{2,})",
+        r"\bexclude\s+([a-z0-9][a-z0-9\-]{2,})",
+        r"\bwithout\s+([a-z0-9][a-z0-9\-]{2,})",
+    ):
+        terms.extend(re.findall(pattern, text))
+    return list(dict.fromkeys(terms))
+
+
+def _archive_query_terms(query: str) -> List[str]:
+    stop = {
+        "any",
+        "are",
+        "content",
+        "deal",
+        "deals",
+        "from",
+        "give",
+        "good",
+        "have",
+        "lead",
+        "leads",
+        "live",
+        "more",
+        "other",
+        "post",
+        "posts",
+        "posting",
+        "search",
+        "there",
+        "this",
+        "yeah",
+        "context",
+        "we",
+        "what",
+        "whats",
+        "with",
+        "worthy",
+        "worth",
+        "your",
+    }
+    return [term for term in _tokens(query) if term not in stop and not term.startswith("$")]
 
 
 def search_current_server_context(*, query: str, channel_id: str = "", max_results: int = 8) -> Dict[str, Any]:
@@ -545,12 +614,72 @@ def pick_primary_source_message(
     return {}
 
 
+def _json_count(path: Path, key: str) -> int:
+    doc = _read_json(path, {})
+    if not isinstance(doc, dict):
+        return 0
+    val = doc.get(key)
+    return len(val) if isinstance(val, list) else 0
+
+
+def content_record_status() -> Dict[str, Any]:
+    chat_doc = _read_json(CHAT_STATE, {})
+    channels = (chat_doc.get("channels") or {}) if isinstance(chat_doc, dict) else {}
+    chat_messages = 0
+    for row in channels.values():
+        if isinstance(row, dict):
+            chat_messages += len(row.get("messages") or [])
+    run_count = len(list(AGENT_RUNS.glob("*.json"))) if AGENT_RUNS.exists() else 0
+    return {
+        "short_term_chat_memory": {
+            "path": str(CHAT_STATE),
+            "exists": CHAT_STATE.exists(),
+            "channel_count": len(channels),
+            "message_count": chat_messages,
+            "purpose": "Recent live-chat memory used for ongoing channel conversation.",
+        },
+        "review_runs_and_drafts": {
+            "path": str(AGENT_RUNS),
+            "exists": AGENT_RUNS.exists(),
+            "run_file_count": run_count,
+            "purpose": "Generated review runs, drafts, feedback, validation, and publish attempts.",
+        },
+        "post_history": {
+            "path": str(POST_HISTORY),
+            "exists": POST_HISTORY.exists(),
+            "item_count": _json_count(POST_HISTORY, "items"),
+            "purpose": "Tracks stories/posts already used to reduce repeats.",
+        },
+        "review_posts": {
+            "path": str(REVIEW_POSTS),
+            "exists": REVIEW_POSTS.exists(),
+            "post_count": _json_count(REVIEW_POSTS, "posts"),
+            "purpose": "Tracks review messages posted for approval/feedback.",
+        },
+        "durable_memory_rules": {
+            "path": str(AGENT_MEMORY),
+            "exists": AGENT_MEMORY.exists(),
+            "purpose": "Stores durable rules from remember commands and do-not-claim rules.",
+        },
+        "token_usage_log": {
+            "path": str(TOKEN_USAGE),
+            "exists": TOKEN_USAGE.exists(),
+            "entry_count": _json_count(TOKEN_USAGE, "entries"),
+            "purpose": "Tracks live-chat model/token usage estimates.",
+        },
+        "limitation": "This is not yet a polished searchable content library/swipe-file for every ad hoc live-chat draft. Review workflows are stored more completely than casual chat drafts.",
+    }
+
+
 def answer_server_setup_question(*, query: str) -> Dict[str, Any]:
     cfg = load_config()
     agent = cfg.get("agent") or {}
     chat = agent.get("chat") or {}
+    reese_bot = agent.get("reese_bot") or {}
     publishing = cfg.get("publishing") or {}
     feedback = cfg.get("feedback") or {}
+    bot_owned_channel_ids = [str(x) for x in (reese_bot.get("bot_owned_channel_ids") or [])]
+    archive = search_archive_content(query=query or "setup access", max_results=3)
     return {
         "ok": True,
         "query": query,
@@ -560,8 +689,22 @@ def answer_server_setup_question(*, query: str) -> Dict[str, Any]:
             "reese_chat_enabled": chat.get("enabled", True),
             "review_channel_id": publishing.get("review_channel_id") or feedback.get("review_channel_id"),
             "review_approval_role_id": publishing.get("review_approval_role_id") or feedback.get("approval_role_id"),
-            "chat_response_transport": "webhook via config.secrets.json",
-            "gateway_bridge": "RSAdminBot on_message",
+            "reese_bot_enabled": bool(reese_bot.get("enabled", False)),
+            "reese_bot_service": "mirror-world-reesebot.service",
+            "reese_bot_owned_channel_ids": bot_owned_channel_ids,
+            "chat_response_transport": "ReeseBot Discord Gateway client sends as the Reese bot account; webhook is fallback only.",
+            "gateway_bridge": "MarketingKnowledgeBase.agent.reese_bot on_message for live chat.",
+            "rsadminbot_role": "RSAdminBot remains active for admin tooling and review controls/buttons; it backs out of the Reese live chat channel when standalone ReeseBot is enabled.",
+            "rsadminbot_chat_bridge_disabled": bool(reese_bot.get("disable_rsadminbot_chat_bridge", False)),
+            "review_controls_transport": "RSAdminBot/existing control path unless agent.reese_bot.controls_as_bot is enabled.",
             "knowledge_base_live_context": live_context_status(),
+            "knowledge_base_archive_search": {
+                "available": bool(archive.get("ok")),
+                "latest_sync_at": archive.get("latest_sync_at"),
+                "sources_checked": archive.get("sources_checked") or [],
+                "candidate_count_returned": len(archive.get("candidates") or []),
+                "search_note": archive.get("note"),
+            },
+            "content_record_storage": content_record_status(),
         },
     }

@@ -38,6 +38,8 @@ def _fact_bullets(candidate: Dict[str, Any], *, include_urls: bool = False) -> L
 
 def _asset_urls(candidate: Dict[str, Any]) -> List[Dict[str, str]]:
     assets: List[Dict[str, str]] = []
+    source_message_id = str(candidate.get("message_id") or "")
+    source_message_link = str(candidate.get("message_link") or "")
     for att in candidate.get("attachments") or []:
         url = str(att.get("url") or "").strip()
         if url:
@@ -47,6 +49,8 @@ def _asset_urls(candidate: Dict[str, Any]) -> List[Dict[str, str]]:
                     "url": url,
                     "filename": str(att.get("filename") or ""),
                     "content_type": str(att.get("content_type") or ""),
+                    "source_message_id": source_message_id,
+                    "source_message_link": source_message_link,
                 }
             )
     for img in candidate.get("embed_images") or []:
@@ -57,6 +61,8 @@ def _asset_urls(candidate: Dict[str, Any]) -> List[Dict[str, str]]:
                     "type": "embed_image",
                     "url": url,
                     "source": str(img.get("source") or "embed"),
+                    "source_message_id": source_message_id,
+                    "source_message_link": source_message_link,
                 }
             )
     return assets

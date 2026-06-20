@@ -101,12 +101,13 @@ def build_live_chat_context(
         context["evidence_pack"]["market_context"] = market
         context["context_used"]["live_market_verified"] = bool(market.get("verified_live_market"))
 
-    if intent == "content_discovery":
+    if intent in {"content_discovery", "market_research"}:
         archive = search_archive_content(query=message_text, max_results=6)
         candidates = archive.get("candidates") or []
         context["evidence_pack"]["archive_content"] = archive
-        context["evidence_pack"]["primary_message"] = candidates[0] if candidates else {}
-        context["context_used"]["source_messages"] = len(candidates)
+        if intent == "content_discovery" or not context["evidence_pack"].get("primary_message"):
+            context["evidence_pack"]["primary_message"] = candidates[0] if candidates else {}
+        context["context_used"]["source_messages"] = max(int(context["context_used"].get("source_messages") or 0), len(candidates))
         context["context_used"]["archive_sources_checked"] = [
             row.get("label") for row in archive.get("sources_checked") or [] if row.get("exists")
         ]

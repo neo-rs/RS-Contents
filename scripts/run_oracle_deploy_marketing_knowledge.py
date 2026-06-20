@@ -30,6 +30,7 @@ SYNC_PATHS = [
     "systemd/mirror-world-marketing-knowledge-sync.timer",
     "systemd/mirror-world-marketing-daily-post.service",
     "systemd/mirror-world-marketing-daily-post.timer",
+    "systemd/mirror-world-reesebot.service",
     "scripts/install_marketing_knowledge_timer.sh",
     "scripts/pull_marketing_knowledge_from_oracle.py",
 ]
@@ -211,11 +212,11 @@ if [ -f "$TMP/scripts/run_oracle_deploy_marketing_knowledge.py" ]; then
 fi
 mkdir -p "$LIVE_ROOT/systemd"
 if [ -d "$TMP/systemd" ]; then
-  for unit in "$TMP"/systemd/mirror-world-marketing-*.service "$TMP"/systemd/mirror-world-marketing-*.timer; do
+  for unit in "$TMP"/systemd/mirror-world-marketing-*.service "$TMP"/systemd/mirror-world-marketing-*.timer "$TMP"/systemd/mirror-world-reesebot.service; do
     [ -f "$unit" ] || continue
     cp -f "$unit" "$LIVE_ROOT/systemd/" 2>/dev/null || sudo cp -f "$unit" "$LIVE_ROOT/systemd/"
   done
-  sudo chown rsadmin:rsadmin "$LIVE_ROOT"/systemd/mirror-world-marketing-* 2>/dev/null || true
+  sudo chown rsadmin:rsadmin "$LIVE_ROOT"/systemd/mirror-world-marketing-* "$LIVE_ROOT"/systemd/mirror-world-reesebot.service 2>/dev/null || true
 fi
 rm -rf "$TMP" {shlex.quote(remote_tar)}
 echo OK=extract_local

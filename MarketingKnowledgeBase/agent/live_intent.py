@@ -38,7 +38,17 @@ MARKET_HINTS = ("market", "comps", "resale", "ebay", "stockx", "profit", "worth"
 CONTENT_DISCOVERY_HINTS = (
     "best content",
     "good content",
+    "content worthy",
+    "worthy content",
     "content right now",
+    "live context",
+    "from live context",
+    "archive",
+    "search archive",
+    "other leads",
+    "more leads",
+    "give me leads",
+    "give me other leads",
     "what should we post",
     "what to post",
     "strongest content",
@@ -46,7 +56,20 @@ CONTENT_DISCOVERY_HINTS = (
     "what's hot",
     "whats hot",
 )
-ROLE_HINTS = ("who has access", "who can see", "roles", "permission", "permissions", "access to")
+CONTENT_QUESTION_WORDS = (
+    "content",
+    "lead",
+    "leads",
+    "deal",
+    "deals",
+    "post",
+    "posts",
+    "worthy",
+    "worth posting",
+    "anything good",
+    "any good",
+)
+ROLE_HINTS = ("who has access", "who can see", "roles", "permission", "permissions")
 SERVER_HINTS = (
     "setup",
     "configured",
@@ -60,6 +83,24 @@ SERVER_HINTS = (
     "knowledge base",
     "kb data",
     "data sync",
+    "what do you have access to",
+    "what can you access",
+    "what can you see",
+    "what can you read",
+    "what data can you see",
+    "what data do you have",
+    "what knowledge do you have",
+    "what records do you keep",
+    "do you keep a record",
+    "do you keep record",
+    "do you store",
+    "what do you store",
+    "content you made",
+    "contents you made",
+    "do you have access",
+    "what acces do you have",
+    "your access",
+    "your knowledge",
 )
 TICKET_HINTS = ("ticket", "support ticket", "help inquiry", "member issue")
 CANCEL_HINTS = ("cancel", "cancellation", "refund", "win back", "save attempt")
@@ -106,6 +147,16 @@ def _message_links(text: str) -> List[Dict[str, str]]:
     for match in re.finditer(r"(?:https?://)?(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d{15,25})/(\d{15,25})/(\d{15,25})", text or ""):
         rows.append({"guild_id": match.group(1), "channel_id": match.group(2), "message_id": match.group(3)})
     return rows
+
+
+def _looks_like_content_question(lowered: str) -> bool:
+    if any(h in lowered for h in CONTENT_DISCOVERY_HINTS):
+        return True
+    if any(word in lowered for word in CONTENT_QUESTION_WORDS) and any(
+        marker in lowered for marker in ("?", "any", "there", "give me", "from your", "from live", "show me")
+    ):
+        return True
+    return False
 
 
 def route_live_chat_intent(
@@ -175,7 +226,7 @@ def route_live_chat_intent(
             reason="Message asks for GHL/SMS/campaign copy.",
         ).to_dict()
 
-    if any(h in lowered for h in CONTENT_DISCOVERY_HINTS):
+    if _looks_like_content_question(lowered):
         return IntentRoute(
             intent="content_discovery",
             confidence=0.88,

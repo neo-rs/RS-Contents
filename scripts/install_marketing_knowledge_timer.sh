@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 for unit in mirror-world-marketing-knowledge-sync.service mirror-world-marketing-knowledge-sync.timer \
   mirror-world-marketing-daily-post.service mirror-world-marketing-daily-post.timer \
-  mirror-world-marketing-review-agent.service; do
+  mirror-world-marketing-review-agent.service mirror-world-reesebot.service; do
   src="$ROOT_DIR/systemd/$unit"
   if [ ! -f "$src" ]; then
     echo "ERROR: missing unit file: $src"
@@ -26,6 +26,11 @@ sudo systemctl enable --now mirror-world-marketing-daily-post.timer
 echo "Daily post timer:"
 systemctl list-timers mirror-world-marketing-daily-post.timer --no-pager || true
 
-echo "Review agent service file installed; RSAdminBot is the active Discord bridge."
+echo "Review agent service file installed; RSAdminBot remains the admin/review-controls bridge."
 systemctl is-enabled mirror-world-marketing-review-agent.service || true
 systemctl is-active mirror-world-marketing-review-agent.service || true
+
+sudo systemctl enable --now mirror-world-reesebot.service
+echo "ReeseBot service:"
+systemctl is-enabled mirror-world-reesebot.service || true
+systemctl is-active mirror-world-reesebot.service || true

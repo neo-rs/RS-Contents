@@ -189,8 +189,6 @@ def _disabled_feature_reply(intent: str) -> str:
         return "Role/channel access tools are disabled right now, so I won’t guess who can see it."
     if intent == "ghl_sms_copy" and not _feature_enabled("ghl_sms_tools_enabled", True):
         return "GHL/SMS draft tools are disabled right now. I won’t draft campaign copy until that flag is on."
-    if intent == "market_research" and not _feature_enabled("market_tools_enabled", False):
-        return "Live market tools are disabled right now. I can only use market clues already present in source messages."
     if intent in {"ticket_support", "cancellation_save", "help_inquiry"} and not _feature_enabled("ticket_tools_enabled", False):
         return (
             "I can recognize that workflow, but ticket/cancellation tools are not wired yet. "
@@ -212,6 +210,11 @@ def _intent_token_cap(intent: str) -> int:
         return int(budget.get(key) or 0)
     except Exception:
         return 0
+
+
+def _tool_round_count(route: Dict[str, Any]) -> int:
+    workflow_steps = {"draft_lead_copy", "draft_ghl_sms", "load_active_review", "recent_chat_memory", "store_memory_rule"}
+    return len([tool for tool in (route.get("needs_tools") or []) if str(tool) not in workflow_steps])
 
 
 def _load_token_usage() -> Dict[str, Any]:
@@ -285,9 +288,11 @@ def _instructions_for_intent(intent: str) -> str:
     assistant_name = load_webhook_profile(_load_config()).get("username") or "Reese"
     base = (
         f"You are {assistant_name}, the RS marketing AI chat assistant. Be direct, useful, and grounded. "
+        "This is an internal RS admin channel, not public marketing copy. "
         "Tone: RS/street-smart, not too formal, no cursing, no fake hype, no kissing ass. "
         "Do not invent facts, checkouts, profit, urgency, role access, market comps, or member wins. "
-        "If a tool/context is not wired or evidence is missing, say that plainly."
+        "Use the provided Focused context/evidence first. Do not say data is not loaded when the evidence pack includes setup_facts, archive_content, recent_channel_messages, or primary_message. "
+        "If external tools are missing, explain the specific missing external piece without ignoring local RS archive/live-context evidence."
     )
     if intent == "new_lead_copy":
         return (
@@ -302,6 +307,8 @@ def _instructions_for_intent(intent: str) -> str:
             base
             + " The user is asking what content is strongest right now. Use archive_content candidates only. "
             "Recommend the best 1-3 options with why they rank, the source message link, and the exact primary_image_url when present. "
+            "If archive_content.excluded_terms is present, do not recommend candidates marked excluded_by_query. "
+            "If no candidate matches the exact product term, say that and give the best alternative RS archive candidates. "
             "Do not swap images between candidates. If no image is available for a candidate, say so. "
             "Keep claims separated: lead/alert vs success/member win."
         )
@@ -313,8 +320,21 @@ def _instructions_for_intent(intent: str) -> str:
         )
     if intent == "role_access_question":
         return base + " For role/channel access, only explain permission data if provided. If not provided, do not guess."
+    if intent == "market_research":
+        return (
+            base
+            + " Use local archive_content, server_context_results, primary_message, and market_context. "
+            "External live market comps are not configured unless verified_live_market is true, but local RS archive/source clues are still usable. "
+            "Give a grounded worth-posting read instead of refusing."
+        )
     if intent == "server_setup_question":
-        return base + " Answer setup questions from provided config facts and local docs only."
+        return (
+            base
+            + " Answer setup/access/storage questions from provided setup_facts. "
+            "If setup_facts show live_context, archive search, or content_record_storage, state those capabilities plainly. "
+            "Do not say you only have generic OpenAI knowledge when local KB/storage facts are present. "
+            "Be clear about limits: no independent browser-like server browsing, no ticket/member/private data unless wired, and no live market verification unless provided."
+        )
     return (
         base
         + " Only use active review context when the detected intent says it is loaded. Keep normal chat brief."
@@ -328,6 +348,7 @@ def handle_live_chat_message(
     user_name: str,
     message_text: str,
     discord_context: Dict[str, Any] | None = None,
+    send_reply: bool = True,
 ) -> Dict[str, Any]:
     text = str(message_text or "").strip()
     if not text:
@@ -364,7 +385,8 @@ def handle_live_chat_message(
         reply = _disabled_feature_reply(str(route.get("intent") or ""))
     else:
         max_tool_rounds = int(_token_budget().get("max_tool_rounds") or 0)
-        if max_tool_rounds and len(route.get("needs_tools") or []) > max_tool_rounds:
+        tool_rounds = _tool_round_count(route)
+        if max_tool_rounds and tool_rounds > max_tool_rounds:
             reply = (
                 "That request needs more context steps than the current tool-round cap allows. "
                 "Reply with the exact message/link or narrow the ask and I’ll handle it tighter."
@@ -390,7 +412,7 @@ def handle_live_chat_message(
             )
             del history[:-_history_limit()]
             _save_state(doc)
-            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
+            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply) if send_reply else {"ok": True, "transport": "caller"}
             return {"ok": True, "reply": reply, "post": post_result, "intent": route}
         live_context = build_live_chat_context(
             route=route,
@@ -424,7 +446,7 @@ def handle_live_chat_message(
                     "model": model,
                     "estimated_input_tokens": estimated,
                     "output_tokens": 0,
-                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "tool_rounds": tool_rounds,
                     "blocked": True,
                     "reason": "intent_token_cap",
                     "intent_cap": intent_cap,
@@ -451,7 +473,7 @@ def handle_live_chat_message(
             )
             del history[:-_history_limit()]
             _save_state(doc)
-            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
+            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply) if send_reply else {"ok": True, "transport": "caller"}
             return {"ok": True, "reply": reply, "post": post_result, "intent": route}
         budget = _budget_allowed(estimated_input_tokens=estimated)
         if not budget.get("allowed"):
@@ -468,7 +490,7 @@ def handle_live_chat_message(
                     "model": model,
                     "estimated_input_tokens": estimated,
                     "output_tokens": 0,
-                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "tool_rounds": tool_rounds,
                     "blocked": True,
                     "reason": "daily_hard_cap",
                 }
@@ -497,7 +519,7 @@ def handle_live_chat_message(
                     "endpoint": result.endpoint,
                     "estimated_input_tokens": input_tokens,
                     "output_tokens": output_tokens or _estimate_tokens(reply),
-                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "tool_rounds": tool_rounds,
                     "context_used": live_context.get("context_used") or {},
                     "blocked": False,
                     "warn_daily_budget": bool(budget.get("warn")),
@@ -526,5 +548,5 @@ def handle_live_chat_message(
     )
     del history[:-_history_limit()]
     _save_state(doc)
-    post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
+    post_result = post_chat_webhook(channel_id=int(channel_id), content=reply) if send_reply else {"ok": True, "transport": "caller"}
     return {"ok": True, "reply": reply, "post": post_result, "intent": route}

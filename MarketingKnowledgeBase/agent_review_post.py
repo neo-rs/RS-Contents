@@ -38,25 +38,32 @@ def _pick_archive_story(cfg: Dict[str, Any], *, story_id: str = "") -> Tuple[str
     raise RuntimeError("No eligible story found in daily/weekly archive candidates.")
 
 
-def review_controls_payload(run_id: str, *, intro: str = "Draft ready for review. Use the buttons below or reply with feedback.") -> Dict[str, Any]:
+def review_controls_payload(
+    run_id: str,
+    *,
+    intro: str = "Draft ready for review. Reply with feedback or a control command.",
+    include_components: bool = False,
+) -> Dict[str, Any]:
     content = (
         f"{intro}\n\n"
         "AI Review Controls\n"
         f"Run: `{run_id}`\n\n"
-        "Buttons:\n"
-        "- Status: current run state and validation\n"
-        "- Explain: sources, proof, memory, and claim status\n"
-        "- Revise: asks what to change, then posts a new draft\n"
-        "- Remember: asks what rule to save for future drafts\n"
-        "- Approve: marks this run approved\n"
-        "- Publish: asks for confirmation before live posting\n"
-        "- Reject: asks why and stores the rejection reason\n\n"
-        "You can also reply in this channel, like: `less hype, more proof`."
+        "Reply commands:\n"
+        "- `status`: current run state and validation\n"
+        "- `explain`: sources, proof, memory, and claim status\n"
+        "- `revise: <what to change>`: asks Reese to revise the draft\n"
+        "- `remember: <rule>`: saves a rule for future drafts\n"
+        "- `approve`: marks this run approved\n"
+        "- `publish`: use only when ready to publish live\n"
+        "- `reject: <reason>`: stores the rejection reason\n\n"
+        "You can also reply naturally, like: `less hype, more proof`."
     )
-    return {
+    payload = {
         "content": content[:1900],
         "allowed_mentions": {"parse": []},
-        "components": [
+    }
+    if include_components:
+        payload["components"] = [
             {
                 "type": 1,
                 "components": [
@@ -74,13 +81,41 @@ def review_controls_payload(run_id: str, *, intro: str = "Draft ready for review
                     {"type": 2, "style": 4, "label": "Reject", "custom_id": "mkb_review_reject"},
                 ],
             },
-        ],
-    }
+        ]
+    return payload
 
 
 def post_review_controls(*, channel_id: int, run_id: str, intro: str = "") -> None:
-    payload = review_controls_payload(run_id, intro=intro or "Draft ready for review. Use the buttons below or reply with feedback.")
+    payload = review_controls_payload(run_id, intro=intro or "Draft ready for review. Reply with feedback or a control command.")
     _post_discord_payload(channel_id=int(channel_id), payload=payload, label="agent review controls")
+
+
+def _blocked_review_draft(*, run_id: str, story_id: str, source_link: str, validation: Dict[str, Any]) -> Dict[str, Any]:
+    issues = validation.get("issues") or []
+    unsupported = validation.get("unsupported_claims") or []
+    issue_lines = "\n".join(f"- {str(issue)[:220]}" for issue in issues[:6]) or "- Validation blocked this draft."
+    unsupported_lines = "\n".join(
+        f"- {str(row.get('claim_text') or row)[:220]}" for row in unsupported[:6] if isinstance(row, dict)
+    )
+    body = (
+        "**AI REVIEW BLOCKED** ⚠️\n\n"
+        "I stopped this draft before posting it as normal content because validation found source/claim problems.\n\n"
+        f"Run: `{run_id or '-'}`\n"
+        f"Story: `{story_id or '-'}`\n"
+        f"Source: {source_link or '-'}\n\n"
+        f"Issues:\n{issue_lines}\n"
+    )
+    if unsupported_lines:
+        body += f"\nUnsupported/source-specific claims:\n{unsupported_lines}\n"
+    body += "\nReply with `regenerate` or give exact correction details before this goes live."
+    return {
+        "story_id": story_id,
+        "source_message_link": source_link,
+        "body_markdown": body[:1900],
+        "reuse_assets": [],
+        "validation_status": "blocked",
+        "blocked_review_notice": True,
+    }
 
 
 def generate_and_post_agent_review(
@@ -117,8 +152,18 @@ def generate_and_post_agent_review(
     run = result.get("run") or {}
     run_id = str(run.get("run_id") or "")
     draft = result.get("draft") or {}
+    validation = result.get("validation") or {}
     draft["archive_source"] = draft.get("archive_source") or candidate_source
     draft["trigger"] = trigger
+    if validation and not bool(validation.get("ready_to_publish", False)):
+        draft = _blocked_review_draft(
+            run_id=run_id,
+            story_id=str(draft.get("story_id") or picked_story_id),
+            source_link=str(draft.get("source_message_link") or ""),
+            validation=validation,
+        )
+        draft["archive_source"] = candidate_source
+        draft["trigger"] = trigger
     posted = publish_marketing_draft(draft, channel_id=review_channel_id, dry_run=False)
     if run_id:
         run = load_run(run_id)
@@ -164,7 +209,7 @@ def generate_and_post_agent_review(
         "review_message_url": posted.get("url"),
         "posted": posted,
         "controls_posted": controls_posted,
-        "validation": result.get("validation") or {},
+        "validation": validation,
         "tool_summary": result.get("tool_summary") or [],
         "post_history": history_row,
         "audit_log": audit_result,

@@ -31,7 +31,6 @@ _DEFAULT_ELIGIBLE = (
     "important_trading_cards",
     "daily_schedule",
     "weekly_schedule",
-    "success",
 )
 _DEFAULT_EXCLUDE = ("sneakers", "full_send_monitor", "monitoring", "chipotle", "staff_wins")
 _BUCKET_PRIORITY = (
@@ -41,7 +40,6 @@ _BUCKET_PRIORITY = (
     "important_trading_cards",
     "daily_schedule",
     "weekly_schedule",
-    "success",
 )
 
 
@@ -162,6 +160,8 @@ def _score_for_wym(candidate: Dict[str, Any]) -> int:
 def filter_eligible_candidates(candidates_doc: Dict[str, Any], *, exclude_posted: bool = True) -> List[Dict[str, Any]]:
     src = _sourcing_config()
     eligible = tuple(src.get("eligible_buckets") or _DEFAULT_ELIGIBLE)
+    if not bool(src.get("allow_success_as_primary", False)):
+        eligible = tuple(bucket for bucket in eligible if bucket != "success")
     exclude = set(src.get("exclude_buckets") or _DEFAULT_EXCLUDE)
     posted = _recently_posted_story_ids() if exclude_posted else set()
 

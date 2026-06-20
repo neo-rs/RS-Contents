@@ -8,6 +8,7 @@ from MarketingKnowledgeBase.agent.live_tools import (
     answer_server_setup_question,
     check_role_channel_access,
     fetch_recent_channel_messages,
+    inspect_linked_message,
     inspect_replied_message,
     pick_primary_source_message,
     pull_market_context,
@@ -67,6 +68,13 @@ def build_live_chat_context(
         reply = inspect_replied_message(discord_context=discord_context)
         if reply.get("ok"):
             context["evidence_pack"]["reply_message"] = reply.get("message") or {}
+        linked = inspect_linked_message(
+            message_text=message_text,
+            references=references,
+            discord_context=discord_context,
+        )
+        if linked.get("ok"):
+            context["evidence_pack"]["linked_message"] = linked.get("message") or {}
         target_channels = referenced_channels[:2]
         recent_messages: List[Dict[str, Any]] = []
         if not target_channels and intent in {"new_lead_copy", "market_research"}:
@@ -81,7 +89,9 @@ def build_live_chat_context(
         context["evidence_pack"]["recent_channel_messages"] = recent_messages[:15]
         context["context_used"]["source_messages"] = len(recent_messages[:15])
         primary = pick_primary_source_message(
-            replied_message=context["evidence_pack"].get("reply_message") or {},
+            replied_message=context["evidence_pack"].get("reply_message")
+            or context["evidence_pack"].get("linked_message")
+            or {},
             recent_messages=recent_messages,
         )
         context["evidence_pack"]["primary_message"] = primary

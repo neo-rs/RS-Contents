@@ -137,4 +137,3 @@ def agent_tool_specs(*, allow_publish: bool = False) -> List[Dict[str, Any]]:
             )
         )
     return tools
-

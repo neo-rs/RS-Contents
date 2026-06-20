@@ -24,6 +24,10 @@ NEW_LEAD_HINTS = (
     "no success post",
     "write for this",
     "write this up",
+    "make out of this",
+    "make from this",
+    "turn this into",
+    "what can you make",
     "alert",
     "important",
     "online-important",
@@ -32,7 +36,20 @@ NEW_LEAD_HINTS = (
 GHL_SMS_HINTS = ("ghl", "sms", "text blast", "automation", "campaign", "follow up", "follow-up")
 MARKET_HINTS = ("market", "comps", "resale", "ebay", "stockx", "profit", "worth", "selling for")
 ROLE_HINTS = ("who has access", "who can see", "roles", "permission", "permissions", "access to")
-SERVER_HINTS = ("setup", "configured", "config", "webhook", "service", "timer", "channel does", "where is")
+SERVER_HINTS = (
+    "setup",
+    "configured",
+    "config",
+    "webhook",
+    "service",
+    "timer",
+    "channel does",
+    "where is",
+    "last sync",
+    "knowledge base",
+    "kb data",
+    "data sync",
+)
 TICKET_HINTS = ("ticket", "support ticket", "help inquiry", "member issue")
 CANCEL_HINTS = ("cancel", "cancellation", "refund", "win back", "save attempt")
 SUGGESTION_HINTS = ("suggestion", "suggestions channel", "feature request")
@@ -73,6 +90,13 @@ def _channel_ids(text: str, mentioned_channel_ids: List[str] | None = None) -> L
     return out
 
 
+def _message_links(text: str) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    for match in re.finditer(r"(?:https?://)?(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d{15,25})/(\d{15,25})/(\d{15,25})", text or ""):
+        rows.append({"guild_id": match.group(1), "channel_id": match.group(2), "message_id": match.group(3)})
+    return rows
+
+
 def route_live_chat_intent(
     *,
     message_text: str,
@@ -91,6 +115,7 @@ def route_live_chat_intent(
     text = str(message_text or "").strip()
     lowered = text.lower()
     channel_ids = _channel_ids(text, mentioned_channel_ids)
+    message_links = _message_links(text)
     has_reply = bool(str(replied_to_message_id or "").strip())
 
     if lowered.startswith("remember:"):
@@ -148,13 +173,14 @@ def route_live_chat_intent(
             reason="Message asks who can see or access a channel.",
         ).to_dict()
 
-    if any(h in lowered for h in NEW_LEAD_HINTS) and (channel_ids or has_reply or "lead" in lowered):
+    if any(h in lowered for h in NEW_LEAD_HINTS) and (channel_ids or message_links or has_reply or "lead" in lowered):
         return IntentRoute(
             intent="new_lead_copy",
             confidence=0.9,
             referenced_channel_ids=channel_ids,
             needs_tools=[
                 "resolve_discord_references",
+                "inspect_linked_message",
                 "inspect_replied_message",
                 "fetch_recent_channel_messages",
                 "pull_market_context",

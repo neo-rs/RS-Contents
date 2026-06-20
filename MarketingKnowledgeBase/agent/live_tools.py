@@ -18,6 +18,9 @@ REPO = BASE.parent
 LIVE_CONTEXT = DATA / "live_context.json"
 STORY_CANDIDATES = DATA / "story_candidates.json"
 APPROVED_EXAMPLES = DATA / "approved_examples.json"
+MESSAGE_LINK_RE = re.compile(
+    r"(?:https?://)?(?:ptb\.|canary\.)?discord(?:app)?\.com/channels/(\d{15,25})/(\d{15,25})/(\d{15,25})"
+)
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -96,6 +99,28 @@ def _iter_live_entries() -> Iterable[Dict[str, Any]]:
                 yield row
 
 
+def live_context_status() -> Dict[str, Any]:
+    live = _read_json(LIVE_CONTEXT, {})
+    buckets = live.get("buckets") if isinstance(live, dict) else {}
+    counts: Dict[str, int] = {}
+    if isinstance(buckets, dict):
+        for bucket, payload in buckets.items():
+            counts[str(bucket)] = len((payload or {}).get("entries") or [])
+    return {
+        "path": str(LIVE_CONTEXT),
+        "exists": LIVE_CONTEXT.exists(),
+        "last_sync_at": str(live.get("last_sync_at") or "") if isinstance(live, dict) else "",
+        "bucket_counts": counts,
+    }
+
+
+def _message_links(text: str) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    for match in MESSAGE_LINK_RE.finditer(text or ""):
+        rows.append({"guild_id": match.group(1), "channel_id": match.group(2), "message_id": match.group(3)})
+    return rows
+
+
 def channel_index() -> Dict[str, Dict[str, str]]:
     by_id: Dict[str, Dict[str, str]] = {}
     for row in _iter_config_channels():
@@ -124,7 +149,8 @@ def resolve_discord_references(
     text = str(message_text or "")
     refs: List[str] = []
     refs.extend(re.findall(r"<#(\d{15,25})>", text))
-    refs.extend(re.findall(r"discord(?:app)?\.com/channels/\d+/(\d{15,25})/\d{15,25}", text))
+    message_links = _message_links(text)
+    refs.extend(row["channel_id"] for row in message_links)
     for cid in (discord_context or {}).get("mentioned_channel_ids") or []:
         refs.append(str(cid))
     explicit_refs = bool(refs)
@@ -158,8 +184,9 @@ def resolve_discord_references(
 
     return {
         "referenced_channels": channels,
+        "referenced_messages": message_links,
         "reply_message_id": str(reply_message_id or (discord_context or {}).get("reply_message_id") or ""),
-        "reference_type": "reply" if reply_message_id else ("mentioned_channel" if channels else "current_channel"),
+        "reference_type": "message_link" if message_links else ("reply" if reply_message_id else ("mentioned_channel" if channels else "current_channel")),
         "current_channel_id": str(channel_id or ""),
     }
 
@@ -208,6 +235,27 @@ def inspect_replied_message(*, discord_context: Dict[str, Any] | None = None) ->
     if not isinstance(reply, dict) or not reply.get("message_id"):
         return {"ok": False, "reason": "No replied-to message was provided."}
     return {"ok": True, "message": _normalize_live_entry(reply)}
+
+
+def inspect_linked_message(
+    *,
+    message_text: str = "",
+    references: Dict[str, Any] | None = None,
+    discord_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    links = list((references or {}).get("referenced_messages") or []) or _message_links(message_text)
+    if not links:
+        return {"ok": False, "reason": "No Discord message link was provided."}
+    linked = (discord_context or {}).get("linked_messages") or {}
+    for link in links:
+        mid = str(link.get("message_id") or "")
+        if mid and isinstance(linked.get(mid), dict):
+            return {"ok": True, "message": _normalize_live_entry(linked[mid]), "source": "discord_gateway"}
+    wanted = {str(link.get("message_id") or "") for link in links}
+    for entry in _iter_live_entries():
+        if str(entry.get("message_id") or "") in wanted:
+            return {"ok": True, "message": _normalize_live_entry(entry), "source": "live_context_cache"}
+    return {"ok": False, "reason": "Message link was parsed, but the exact message was not available in gateway context or live_context cache.", "links": links}
 
 
 def _tokens(query: str) -> List[str]:
@@ -333,11 +381,12 @@ def answer_server_setup_question(*, query: str) -> Dict[str, Any]:
         "query": query,
         "facts": {
             "guild_id": cfg.get("guild_id"),
-            "captain_hook_chat_channel_id": chat.get("channel_id"),
-            "captain_hook_chat_enabled": chat.get("enabled", True),
+            "reese_chat_channel_id": chat.get("channel_id"),
+            "reese_chat_enabled": chat.get("enabled", True),
             "review_channel_id": publishing.get("review_channel_id") or feedback.get("review_channel_id"),
             "review_approval_role_id": publishing.get("review_approval_role_id") or feedback.get("approval_role_id"),
             "chat_response_transport": "webhook via config.secrets.json",
             "gateway_bridge": "RSAdminBot on_message",
+            "knowledge_base_live_context": live_context_status(),
         },
     }

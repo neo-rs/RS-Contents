@@ -1,4 +1,4 @@
-"""Context tools for Captain Hook live chat.
+"""Context tools for Reese live chat.
 
 These tools use local synced knowledge and optional Discord.py context passed by
 RSAdminBot. They do not call external live market, ticket, or GHL send APIs.
@@ -257,7 +257,7 @@ def check_role_channel_access(
         "channel_id": str(channel_id or ""),
         "channel_name": row.get("channel_name") or "",
         "bucket": row.get("bucket") or "",
-        "reason": "Live permission overwrites are not wired into Captain Hook yet, so I will not guess who can see it.",
+        "reason": "Live permission overwrites are not wired into Reese yet, so I will not guess who can see it.",
     }
 
 

@@ -1,4 +1,4 @@
-"""Intent routing for Captain Hook live chat."""
+"""Intent routing for Reese live chat."""
 
 from __future__ import annotations
 

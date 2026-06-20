@@ -1,4 +1,4 @@
-"""Build focused evidence packs for Captain Hook live chat."""
+"""Build focused evidence packs for Reese live chat."""
 
 from __future__ import annotations
 

@@ -36,7 +36,13 @@
       "weekly_schedule",
       "success"
     ],
-    "exclude_buckets": ["sneakers", "full_send_monitor", "monitoring", "chipotle", "staff_wins"],
+    "exclude_buckets": [
+      "sneakers",
+      "full_send_monitor",
+      "monitoring",
+      "chipotle",
+      "staff_wins"
+    ],
     "bucket_score_boost": {
       "full_send_info": 10,
       "important": 8,
@@ -63,7 +69,23 @@
     "schedule": {
       "enabled": true,
       "timezone": "America/New_York",
-      "post_hours": [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+      "post_hours": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
       "morning_hour": 9,
       "evening_hour": 22
     }
@@ -76,7 +98,10 @@
     "approve_emoji": "✅",
     "reject_emoji": "❌",
     "good_examples_channel_id": 1310420229129764924,
-    "good_example_reactor_user_ids": [744705253890326599, 971528709876113478],
+    "good_example_reactor_user_ids": [
+      744705253890326599,
+      971528709876113478
+    ],
     "max_review_messages": 50,
     "max_example_scan_messages": 35,
     "max_examples": 12
@@ -110,11 +135,18 @@
       "market_tools_enabled": false,
       "memory_promotion_enabled": false,
       "token_budget_enabled": true,
-      "webhook_username": "Captain Hook",
+      "webhook_username": "Reese",
       "note": "RSAdminBot listens to this channel through Discord Gateway; replies are sent through a webhook stored in config.secrets.json."
     },
+    "webhook_profile": {
+      "username": "Reese",
+      "avatar_url": "https://cdn.discordapp.com/attachments/1517544158389207111/1517821897348223067/rs_reese_avatar.png?ex=6a37ad4c&is=6a365bcc&hm=aee4b76e25901a534ac41af493dbe6e564a9b3d082769f89068a26c4ae8645f8&",
+      "local_avatar_path": "agant-ai-discord-webhook-profile/avatar/rs_reese_avatar.png",
+      "path": "agant-ai-discord-webhook-profile/profile.json",
+      "note": "Shared AI Discord webhook identity for MarketingKnowledgeBase. Discord requires a public https avatar_url; local_avatar_path is only an asset path."
+    },
     "voice_profile": {
-      "name": "RS Captain Hook",
+      "name": "Reese",
       "style": [
         "street-smart RS tone",
         "not too formal",
@@ -147,7 +179,9 @@
       "hard_stop_after_daily_estimated_tokens": 750000
     },
     "allowed_user_ids": [],
-    "allowed_role_ids": [876598078092754985],
+    "allowed_role_ids": [
+      876598078092754985
+    ],
     "default_auto_publish_mode": "trusted_after_validation",
     "max_revision_count": 8,
     "model_by_stage": {
@@ -305,7 +339,9 @@
     "sneakers": {
       "label": "Sneaker leads and deals",
       "category_id": 1351327970463060088,
-      "extra_channel_ids": [878305076073087026]
+      "extra_channel_ids": [
+        878305076073087026
+      ]
     },
     "important": {
       "label": "Online important deals and promos",
@@ -320,11 +356,15 @@
     },
     "important_instore": {
       "label": "In-store important deals",
-      "channel_ids": [1344378714368118794]
+      "channel_ids": [
+        1344378714368118794
+      ]
     },
     "important_trading_cards": {
       "label": "Trading cards / Pokemon important",
-      "channel_ids": [1499559757873156296]
+      "channel_ids": [
+        1499559757873156296
+      ]
     },
     "weekly_schedule": {
       "label": "Weekly upcoming drops",
@@ -333,7 +373,9 @@
     "daily_schedule": {
       "label": "Daily release schedule",
       "category_id": 1313260017989713981,
-      "extra_channel_ids": [1313575695267663893]
+      "extra_channel_ids": [
+        1313575695267663893
+      ]
     },
     "monitoring": {
       "label": "Live restock monitor alerts",
@@ -345,23 +387,33 @@
     },
     "chipotle": {
       "label": "Food promo code drops",
-      "channel_ids": [1380283269429596350]
+      "channel_ids": [
+        1380283269429596350
+      ]
     },
     "what_you_missed": {
       "label": "Staff marketing posts (what-you-missed)",
-      "channel_ids": [1310420229129764924]
+      "channel_ids": [
+        1310420229129764924
+      ]
     },
     "full_send_info": {
       "label": "Full Send flip writeups",
-      "channel_name_contains": ["full-send-info"]
+      "channel_name_contains": [
+        "full-send-info"
+      ]
     },
     "full_send_monitor": {
       "label": "Full Send monitor hits",
-      "channel_name_contains": ["full-send-monitor"]
+      "channel_name_contains": [
+        "full-send-monitor"
+      ]
     },
     "staff_wins": {
       "label": "Staff WIN OF THE DAY highlights",
-      "channel_ids": [1445628298439954564]
+      "channel_ids": [
+        1445628298439954564
+      ]
     }
   }
 }

@@ -19,6 +19,7 @@ from MarketingKnowledgeBase.agent.state import (
     read_json,
     write_json,
 )
+from MarketingKnowledgeBase.agent.webhook_profile import load_webhook_profile
 from MarketingKnowledgeBase.openai_client import OpenAIResponsesClient
 from MarketingKnowledgeBase.secrets import load_secrets
 
@@ -67,13 +68,25 @@ def post_chat_webhook(*, channel_id: int, content: str) -> Dict[str, Any]:
     if not url:
         raise RuntimeError("Missing agent chat webhook URL in MarketingKnowledgeBase/config.secrets.json")
     secrets = load_secrets()
+    cfg = _load_config()
     chat_cfg = _chat_config()
+    profile = load_webhook_profile(cfg)
     payload: Dict[str, Any] = {
         "content": str(content or "")[:2000],
         "allowed_mentions": {"parse": []},
     }
-    username = str(secrets.get("agent_chat_webhook_username") or chat_cfg.get("webhook_username") or "").strip()
-    avatar_url = str(secrets.get("agent_chat_webhook_avatar_url") or chat_cfg.get("webhook_avatar_url") or "").strip()
+    username = str(
+        profile.get("username")
+        or chat_cfg.get("webhook_username")
+        or secrets.get("agent_chat_webhook_username")
+        or "Reese"
+    ).strip()
+    avatar_url = str(
+        profile.get("avatar_url")
+        or secrets.get("agent_chat_webhook_avatar_url")
+        or chat_cfg.get("webhook_avatar_url")
+        or ""
+    ).strip()
     if username:
         payload["username"] = username[:80]
     if avatar_url.startswith("https://"):
@@ -164,6 +177,43 @@ def _token_budget() -> Dict[str, Any]:
     return budget if isinstance(budget, dict) else {}
 
 
+def _feature_enabled(flag: str, default: bool = True) -> bool:
+    chat = _chat_config()
+    return bool(chat.get(flag, default))
+
+
+def _disabled_feature_reply(intent: str) -> str:
+    if intent == "new_lead_copy" and not _feature_enabled("channel_tools_enabled", True):
+        return "Channel tools are disabled right now, so I can’t safely read that lead context yet."
+    if intent == "role_access_question" and not _feature_enabled("role_tools_enabled", False):
+        return "Role/channel access tools are disabled right now, so I won’t guess who can see it."
+    if intent == "ghl_sms_copy" and not _feature_enabled("ghl_sms_tools_enabled", True):
+        return "GHL/SMS draft tools are disabled right now. I won’t draft campaign copy until that flag is on."
+    if intent == "market_research" and not _feature_enabled("market_tools_enabled", False):
+        return "Live market tools are disabled right now. I can only use market clues already present in source messages."
+    if intent in {"ticket_support", "cancellation_save", "help_inquiry"} and not _feature_enabled("ticket_tools_enabled", False):
+        return (
+            "I can recognize that workflow, but ticket/cancellation tools are not wired yet. "
+            "Before I answer member-specific stuff, we still need the ticket data source, privacy rules, save-offer rules, and escalation rules configured."
+        )
+    return ""
+
+
+def _intent_token_cap(intent: str) -> int:
+    budget = _token_budget()
+    key = "simple_chat_max_input_tokens"
+    if intent == "active_review_help":
+        key = "active_review_max_input_tokens"
+    elif intent in {"new_lead_copy", "channel_question", "role_access_question", "market_research", "ghl_sms_copy"}:
+        key = "channel_context_max_input_tokens"
+    elif intent in {"ticket_support", "cancellation_save", "help_inquiry"}:
+        key = "ticket_context_max_input_tokens"
+    try:
+        return int(budget.get(key) or 0)
+    except Exception:
+        return 0
+
+
 def _load_token_usage() -> Dict[str, Any]:
     doc = read_json(TOKEN_USAGE, {"version": 1, "entries": []})
     return doc if isinstance(doc, dict) else {"version": 1, "entries": []}
@@ -190,6 +240,8 @@ def _daily_estimated_tokens() -> int:
 
 
 def _budget_allowed(*, estimated_input_tokens: int) -> Dict[str, Any]:
+    if not _feature_enabled("token_budget_enabled", True):
+        return {"allowed": True, "daily_total": 0, "projected": int(estimated_input_tokens or 0), "disabled": True}
     budget = _token_budget()
     hard = int(budget.get("hard_stop_after_daily_estimated_tokens") or 0)
     warn = int(budget.get("warn_after_daily_estimated_tokens") or 0)
@@ -230,8 +282,9 @@ def _build_prompt(
 
 
 def _instructions_for_intent(intent: str) -> str:
+    assistant_name = load_webhook_profile(_load_config()).get("username") or "Reese"
     base = (
-        "You are Captain Hook, the RS marketing AI chat assistant. Be direct, useful, and grounded. "
+        f"You are {assistant_name}, the RS marketing AI chat assistant. Be direct, useful, and grounded. "
         "Tone: RS/street-smart, not too formal, no cursing, no fake hype, no kissing ass. "
         "Do not invent facts, checkouts, profit, urgency, role access, market comps, or member wins. "
         "If a tool/context is not wired or evidence is missing, say that plainly."
@@ -298,12 +351,38 @@ def handle_live_chat_message(
             reply = "Remembered for this chat channel."
     elif lowered in {"status", "active run", "current run"}:
         reply = _active_run_summary()
-    elif route.get("intent") in {"ticket_support", "cancellation_save", "help_inquiry"}:
-        reply = (
-            "I can recognize that workflow, but ticket/cancellation tools are not wired yet. "
-            "Before I answer member-specific stuff, we still need the ticket data source, privacy rules, save-offer rules, and escalation rules configured."
-        )
+    elif _disabled_feature_reply(str(route.get("intent") or "")):
+        reply = _disabled_feature_reply(str(route.get("intent") or ""))
     else:
+        max_tool_rounds = int(_token_budget().get("max_tool_rounds") or 0)
+        if max_tool_rounds and len(route.get("needs_tools") or []) > max_tool_rounds:
+            reply = (
+                "That request needs more context steps than the current tool-round cap allows. "
+                "Reply with the exact message/link or narrow the ask and I’ll handle it tighter."
+            )
+            history.append(
+                {
+                    "role": "user",
+                    "user_id": str(user_id),
+                    "name": str(user_name or ""),
+                    "content": text,
+                    "created_at": now_iso(),
+                    "intent": route.get("intent"),
+                }
+            )
+            history.append(
+                {
+                    "role": "assistant",
+                    "name": load_webhook_profile(_load_config()).get("username") or "Reese",
+                    "content": reply,
+                    "created_at": now_iso(),
+                    "intent": route.get("intent"),
+                }
+            )
+            del history[:-_history_limit()]
+            _save_state(doc)
+            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
+            return {"ok": True, "reply": reply, "post": post_result, "intent": route}
         live_context = build_live_chat_context(
             route=route,
             channel_id=int(channel_id),
@@ -320,6 +399,51 @@ def handle_live_chat_message(
             live_context=live_context,
         )
         estimated = _estimate_tokens(prompt)
+        intent_cap = _intent_token_cap(str(route.get("intent") or "general_chat")) if _feature_enabled("token_budget_enabled", True) else 0
+        if intent_cap and estimated > intent_cap:
+            reply = (
+                "That context is too big for the current token cap. "
+                f"Estimated input is about {estimated} tokens, cap is {intent_cap}. "
+                "Reply with the exact message link/reply target or narrow the channel/time window."
+            )
+            _record_token_usage(
+                {
+                    "created_at": now_iso(),
+                    "channel_id": str(channel_id),
+                    "user_id": str(user_id),
+                    "intent": route.get("intent"),
+                    "model": model,
+                    "estimated_input_tokens": estimated,
+                    "output_tokens": 0,
+                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "blocked": True,
+                    "reason": "intent_token_cap",
+                    "intent_cap": intent_cap,
+                }
+            )
+            history.append(
+                {
+                    "role": "user",
+                    "user_id": str(user_id),
+                    "name": str(user_name or ""),
+                    "content": text,
+                    "created_at": now_iso(),
+                    "intent": route.get("intent"),
+                }
+            )
+            history.append(
+                {
+                    "role": "assistant",
+                    "name": load_webhook_profile(_load_config()).get("username") or "Reese",
+                    "content": reply,
+                    "created_at": now_iso(),
+                    "intent": route.get("intent"),
+                }
+            )
+            del history[:-_history_limit()]
+            _save_state(doc)
+            post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
+            return {"ok": True, "reply": reply, "post": post_result, "intent": route}
         budget = _budget_allowed(estimated_input_tokens=estimated)
         if not budget.get("allowed"):
             reply = (
@@ -381,10 +505,11 @@ def handle_live_chat_message(
             "intent": route.get("intent"),
         }
     )
+    assistant_name = load_webhook_profile(_load_config()).get("username") or "Reese"
     history.append(
         {
             "role": "assistant",
-            "name": "Captain Hook",
+            "name": assistant_name,
             "content": reply,
             "created_at": now_iso(),
             "intent": route.get("intent"),

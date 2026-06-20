@@ -1,8 +1,8 @@
-# Captain Hook Smarter Live Chat Build Plan
+# Reese Smarter Live Chat Build Plan
 
 ## Purpose
 
-Captain Hook currently works as a live chat assistant, but it is still mostly a conversational layer over recent chat history and the active marketing review run. The next build should turn it into a smarter RS server assistant that can understand what staff is asking, choose the right tools, retrieve the right context, and answer with grounded RS-style copy or guidance.
+Reese currently works as a live chat assistant, but it is still mostly a conversational layer over recent chat history and the active marketing review run. The next build should turn it into a smarter RS server assistant that can understand what staff is asking, choose the right tools, retrieve the right context, and answer with grounded RS-style copy or guidance.
 
 The first focus is making the current live chat smarter for marketing/content/server-context questions. Ticket support, cancellation saves, help channels, and suggestion channels should be designed into the architecture now, but they should remain placeholders until their data sources and policies are wired.
 
@@ -10,10 +10,10 @@ Target shift:
 
 ```text
 Current:
-Captain Hook can chat with recent memory and active draft context.
+Reese can chat with recent memory and active draft context.
 
 Target:
-Captain Hook understands RS channels, roles, leads, content, marketing memory, GHL/SMS needs, and active drafts through tools and layered memory.
+Reese understands RS channels, roles, leads, content, marketing memory, GHL/SMS needs, and active drafts through tools and layered memory.
 ```
 
 ## Current Baseline
@@ -22,7 +22,7 @@ Current live chat implementation:
 
 - RSAdminBot receives messages through Discord Gateway.
 - RSAdminBot passes live chat messages to `MarketingKnowledgeBase.agent.live_chat.handle_live_chat_message()`.
-- Replies are posted through the configured Captain Hook webhook.
+- Replies are posted through the configured Reese webhook.
 - Recent chat is stored in `MarketingKnowledgeBase/data/agent_chat_sessions.json`.
 - Durable memory rules are stored in `MarketingKnowledgeBase/data/agent_memory.json`.
 - Active review context is read from `MarketingKnowledgeBase/data/agent_review_state.json` and `data/agent_runs/`.
@@ -40,7 +40,7 @@ Current limitation:
 
 ## Phase 1 - Intent Router
 
-Goal: before answering, Captain Hook should decide what kind of request this is and which tools/context are needed.
+Goal: before answering, Reese should decide what kind of request this is and which tools/context are needed.
 
 Add an intent router module:
 
@@ -111,7 +111,7 @@ Acceptance tests:
 
 ## Phase 2 - Live Chat Tool Layer
 
-Goal: give Captain Hook real tools for server context and content work.
+Goal: give Reese real tools for server context and content work.
 
 Add tool module:
 
@@ -305,7 +305,7 @@ Purpose:
 
 Examples:
 
-- "what channel does Captain Hook listen in?"
+- "what channel does Reese listen in?"
 - "what service runs daily posts?"
 - "where is the webhook configured?"
 - "which role can use this?"
@@ -541,7 +541,7 @@ Add config section:
 {
   "agent": {
     "voice_profile": {
-      "name": "RS Captain Hook",
+      "name": "Reese",
       "style": [
         "street-smart RS tone",
         "not too formal",
@@ -630,7 +630,7 @@ I would avoid:
 
 ## Phase 7 - GHL/SMS Readiness
 
-Goal: make Captain Hook useful for GHL/SMS content ideas without sending live SMS yet.
+Goal: make Reese useful for GHL/SMS content ideas without sending live SMS yet.
 
 Initial behavior:
 

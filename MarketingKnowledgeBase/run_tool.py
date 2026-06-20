@@ -256,6 +256,67 @@ def cmd_agent_show_run(args: argparse.Namespace) -> Dict[str, Any]:
     return agent_show_run(run_id=str(args.run_id or "").strip())
 
 
+def cmd_agent_route_chat(args: argparse.Namespace) -> Dict[str, Any]:
+    from MarketingKnowledgeBase.agent.live_intent import route_live_chat_intent
+
+    mentioned = [x.strip() for x in str(args.mentioned_channel_ids or "").split(",") if x.strip()]
+    return route_live_chat_intent(
+        message_text=str(args.message or ""),
+        mentioned_channel_ids=mentioned,
+        replied_to_message_id=str(args.reply_message_id or ""),
+        active_run_summary="available" if args.active_run else "",
+        history=[],
+    )
+
+
+def cmd_agent_live_context(args: argparse.Namespace) -> Dict[str, Any]:
+    from MarketingKnowledgeBase.agent.live_context_builder import build_live_chat_context
+    from MarketingKnowledgeBase.agent.live_intent import route_live_chat_intent
+
+    mentioned = [x.strip() for x in str(args.mentioned_channel_ids or "").split(",") if x.strip()]
+    discord_context = {
+        "mentioned_channel_ids": mentioned,
+        "reply_message_id": str(args.reply_message_id or ""),
+        "reply_message": {},
+        "recent_channel_messages": {},
+        "channel_info": {},
+    }
+    route = route_live_chat_intent(
+        message_text=str(args.message or ""),
+        mentioned_channel_ids=mentioned,
+        replied_to_message_id=str(args.reply_message_id or ""),
+        active_run_summary="",
+        history=[],
+    )
+    context = build_live_chat_context(
+        route=route,
+        channel_id=int(args.channel_id) if args.channel_id else 0,
+        message_text=str(args.message or ""),
+        discord_context=discord_context,
+    )
+    return {"route": route, "context": context}
+
+
+def cmd_agent_token_usage(args: argparse.Namespace) -> Dict[str, Any]:
+    data = _read_json(_data_dir() / "agent_token_usage.json") or {"entries": []}
+    entries = list(data.get("entries") or [])
+    if args.today:
+        from MarketingKnowledgeBase.agent.state import now_iso
+
+        today = now_iso()[:10]
+        entries = [row for row in entries if str(row.get("created_at") or "").startswith(today)]
+    limit = max(1, min(200, int(args.limit or 25)))
+    total_input = sum(int(row.get("estimated_input_tokens") or 0) for row in entries)
+    total_output = sum(int(row.get("output_tokens") or 0) for row in entries)
+    return {
+        "count": len(entries[:limit]),
+        "total_entries": len(entries),
+        "estimated_input_tokens": total_input,
+        "output_tokens": total_output,
+        "entries": entries[:limit],
+    }
+
+
 def cmd_agent_start_review(args: argparse.Namespace) -> Dict[str, Any]:
     from MarketingKnowledgeBase.agent.discord_review_agent import run_review_agent
 
@@ -354,6 +415,22 @@ def main(argv: list[str] | None = None) -> int:
     p_as = sub.add_parser("agent_show_run")
     p_as.add_argument("--run-id", required=True)
 
+    p_arc = sub.add_parser("agent_route_chat")
+    p_arc.add_argument("--message", required=True)
+    p_arc.add_argument("--mentioned-channel-ids", default="")
+    p_arc.add_argument("--reply-message-id", default="")
+    p_arc.add_argument("--active-run", action="store_true")
+
+    p_alc = sub.add_parser("agent_live_context")
+    p_alc.add_argument("--message", required=True)
+    p_alc.add_argument("--channel-id", default="")
+    p_alc.add_argument("--mentioned-channel-ids", default="")
+    p_alc.add_argument("--reply-message-id", default="")
+
+    p_atu = sub.add_parser("agent_token_usage")
+    p_atu.add_argument("--today", action="store_true")
+    p_atu.add_argument("--limit", type=int, default=25)
+
     p_sr = sub.add_parser("agent_start_review")
     p_sr.add_argument("--once", action="store_true")
     p_sr.add_argument("--interval", type=int, default=10)
@@ -380,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
         "agent_handle_review_message": cmd_agent_handle_review_message,
         "agent_list_runs": cmd_agent_list_runs,
         "agent_show_run": cmd_agent_show_run,
+        "agent_route_chat": cmd_agent_route_chat,
+        "agent_live_context": cmd_agent_live_context,
+        "agent_token_usage": cmd_agent_token_usage,
         "agent_start_review": cmd_agent_start_review,
     }
     result = handlers[args.command](args)

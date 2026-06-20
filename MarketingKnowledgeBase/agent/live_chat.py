@@ -8,6 +8,8 @@ from typing import Any, Dict, List
 
 import requests
 
+from MarketingKnowledgeBase.agent.live_context_builder import build_live_chat_context
+from MarketingKnowledgeBase.agent.live_intent import route_live_chat_intent
 from MarketingKnowledgeBase.agent.memory import relevant_memory_prompt, remember_rule
 from MarketingKnowledgeBase.agent.state import (
     DATA,
@@ -22,6 +24,7 @@ from MarketingKnowledgeBase.secrets import load_secrets
 
 BASE = Path(__file__).resolve().parents[1]
 CHAT_STATE = DATA / "agent_chat_sessions.json"
+TOKEN_USAGE = DATA / "agent_token_usage.json"
 
 
 def _load_config() -> Dict[str, Any]:
@@ -33,6 +36,17 @@ def _chat_config() -> Dict[str, Any]:
     agent = (_load_config().get("agent") or {})
     chat = agent.get("chat") or {}
     return chat if isinstance(chat, dict) else {}
+
+
+def _agent_config() -> Dict[str, Any]:
+    agent = (_load_config().get("agent") or {})
+    return agent if isinstance(agent, dict) else {}
+
+
+def _voice_profile() -> Dict[str, Any]:
+    agent = _agent_config()
+    profile = agent.get("voice_profile") or {}
+    return profile if isinstance(profile, dict) else {}
 
 
 def _webhook_url(channel_id: int) -> str:
@@ -107,20 +121,142 @@ def _active_run_summary() -> str:
     )
 
 
-def _build_prompt(*, channel_id: int, user_name: str, message_text: str, history: List[Dict[str, Any]]) -> str:
+def _history_limit() -> int:
+    chat = _chat_config()
+    try:
+        return max(20, min(50, int(chat.get("short_term_history_limit") or 30)))
+    except Exception:
+        return 30
+
+
+def _model_for_intent(intent: str) -> str:
+    agent = _agent_config()
+    chat = agent.get("chat") or {}
+    stages = agent.get("model_by_stage") or {}
+    if intent in {"general_chat", "server_setup_question", "role_access_question"}:
+        return str(chat.get("model") or stages.get("draft") or "gpt-4o")
+    if intent in {"new_lead_copy", "ghl_sms_copy", "market_research"}:
+        return str(chat.get("draft_model") or stages.get("draft") or "gpt-4o")
+    if intent in {"active_review_help", "cancellation_save"}:
+        return str(chat.get("quality_model") or stages.get("final") or chat.get("model") or "gpt-5.5")
+    return str(chat.get("model") or stages.get("draft") or "gpt-4o")
+
+
+def _estimate_tokens(text: str) -> int:
+    return max(1, int(len(str(text or "")) / 4))
+
+
+def _usage_int(usage: Dict[str, Any], *keys: str) -> int:
+    for key in keys:
+        val = usage.get(key)
+        if isinstance(val, int):
+            return val
+    nested = usage.get("input_tokens_details") or usage.get("output_tokens_details") or {}
+    for key in keys:
+        val = nested.get(key) if isinstance(nested, dict) else None
+        if isinstance(val, int):
+            return val
+    return 0
+
+
+def _token_budget() -> Dict[str, Any]:
+    budget = (_agent_config().get("token_budget") or {})
+    return budget if isinstance(budget, dict) else {}
+
+
+def _load_token_usage() -> Dict[str, Any]:
+    doc = read_json(TOKEN_USAGE, {"version": 1, "entries": []})
+    return doc if isinstance(doc, dict) else {"version": 1, "entries": []}
+
+
+def _record_token_usage(row: Dict[str, Any]) -> None:
+    doc = _load_token_usage()
+    entries = doc.setdefault("entries", [])
+    entries.insert(0, row)
+    doc["entries"] = entries[:2000]
+    doc["updated_at"] = now_iso()
+    write_json(TOKEN_USAGE, doc)
+
+
+def _daily_estimated_tokens() -> int:
+    today = now_iso()[:10]
+    doc = _load_token_usage()
+    total = 0
+    for row in doc.get("entries") or []:
+        if str(row.get("created_at") or "").startswith(today):
+            total += int(row.get("estimated_input_tokens") or 0)
+            total += int(row.get("output_tokens") or 0)
+    return total
+
+
+def _budget_allowed(*, estimated_input_tokens: int) -> Dict[str, Any]:
+    budget = _token_budget()
+    hard = int(budget.get("hard_stop_after_daily_estimated_tokens") or 0)
+    warn = int(budget.get("warn_after_daily_estimated_tokens") or 0)
+    daily_total = _daily_estimated_tokens()
+    projected = daily_total + int(estimated_input_tokens or 0)
+    if hard and projected > hard:
+        return {"allowed": False, "daily_total": daily_total, "projected": projected, "hard_stop": hard}
+    return {"allowed": True, "daily_total": daily_total, "projected": projected, "warn": bool(warn and projected > warn)}
+
+
+def _build_prompt(
+    *,
+    channel_id: int,
+    user_name: str,
+    message_text: str,
+    history: List[Dict[str, Any]],
+    route: Dict[str, Any],
+    live_context: Dict[str, Any],
+) -> str:
     recent = history[-12:]
     transcript = "\n".join(
         f"{row.get('role')}: {row.get('name') or ''} {row.get('content') or ''}".strip()
         for row in recent
     )
     memory = relevant_memory_prompt(content_type="agent_live_chat", channel_id=str(channel_id))
+    active = _active_run_summary() if route.get("requires_active_run") else "Not loaded for this request."
+    voice = _voice_profile()
     return (
         f"User: {user_name}\n"
         f"Message: {message_text}\n\n"
+        f"Detected intent:\n{json.dumps(route, ensure_ascii=False, indent=2)}\n\n"
+        f"Focused context/evidence:\n{json.dumps(live_context, ensure_ascii=False, indent=2)[:12000]}\n\n"
         f"Recent chat:\n{transcript or '-'}\n\n"
+        f"Voice profile:\n{json.dumps(voice, ensure_ascii=False, indent=2) if voice else '-'}\n\n"
         f"{memory or ''}\n\n"
-        f"Current review context:\n{_active_run_summary()}"
+        f"Current review context:\n{active}"
     ).strip()
+
+
+def _instructions_for_intent(intent: str) -> str:
+    base = (
+        "You are Captain Hook, the RS marketing AI chat assistant. Be direct, useful, and grounded. "
+        "Tone: RS/street-smart, not too formal, no cursing, no fake hype, no kissing ass. "
+        "Do not invent facts, checkouts, profit, urgency, role access, market comps, or member wins. "
+        "If a tool/context is not wired or evidence is missing, say that plainly."
+    )
+    if intent == "new_lead_copy":
+        return (
+            base
+            + " The user is asking for lead/alert copy. Use the source message/recent channel context. "
+            "If there is no success post, frame it as a lead or alert only. Do not say members cooked, hit, checked out, "
+            "made profit, or secured unless the source proves it. Include suggested copy plus what not to claim."
+        )
+    if intent == "ghl_sms_copy":
+        return (
+            base
+            + " Draft-only GHL/SMS help. Do not send, schedule, segment contacts, or imply live GHL access. "
+            "Output short plain text SMS options with no Discord mentions/custom emoji and clear unsupported-claim notes."
+        )
+    if intent == "role_access_question":
+        return base + " For role/channel access, only explain permission data if provided. If not provided, do not guess."
+    if intent == "server_setup_question":
+        return base + " Answer setup questions from provided config facts and local docs only."
+    return (
+        base
+        + " Only use active review context when the detected intent says it is loaded. Keep normal chat brief."
+    )
 
 
 def handle_live_chat_message(
@@ -129,6 +265,7 @@ def handle_live_chat_message(
     user_id: str,
     user_name: str,
     message_text: str,
+    discord_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     text = str(message_text or "").strip()
     if not text:
@@ -137,11 +274,20 @@ def handle_live_chat_message(
     doc = _load_state()
     history = _channel_rows(doc, int(channel_id))
     lowered = text.lower()
+    mentioned_channel_ids = [str(x) for x in (discord_context or {}).get("mentioned_channel_ids") or []]
+    reply_message_id = str((discord_context or {}).get("reply_message_id") or "")
+    route = route_live_chat_intent(
+        message_text=text,
+        mentioned_channel_ids=mentioned_channel_ids,
+        replied_to_message_id=reply_message_id,
+        active_run_summary="available" if get_active_review_run() else "",
+        history=history[-12:],
+    )
     if lowered in {"help", "commands"}:
         reply = (
-            "I can chat about the current marketing draft, explain the active review run, help rewrite copy, "
-            "or remember style rules. Try: `make this less hype`, `what is the active run?`, or "
-            "`remember: avoid saying members got pinged`."
+            "I can help with active review drafts, new lead/alert copy from mentioned channels, draft-only GHL/SMS ideas, "
+            "server setup questions, and memory rules. Try: `status`, `what can you write for this lead in #online-important`, "
+            "`write a GHL SMS for this`, or `remember: no member win claims without proof`."
         )
     elif lowered.startswith("remember:"):
         rule = text.split(":", 1)[1].strip()
@@ -152,26 +298,78 @@ def handle_live_chat_message(
             reply = "Remembered for this chat channel."
     elif lowered in {"status", "active run", "current run"}:
         reply = _active_run_summary()
+    elif route.get("intent") in {"ticket_support", "cancellation_save", "help_inquiry"}:
+        reply = (
+            "I can recognize that workflow, but ticket/cancellation tools are not wired yet. "
+            "Before I answer member-specific stuff, we still need the ticket data source, privacy rules, save-offer rules, and escalation rules configured."
+        )
     else:
-        cfg = _load_config()
-        agent = cfg.get("agent") or {}
-        model = str((agent.get("chat") or {}).get("model") or agent.get("chat_model") or "gpt-5.5")
-        instructions = (
-            "You are Captain Hook, the RS marketing AI chat assistant. "
-            "Be conversational, concise, and practical. You can discuss active review drafts, rewrite ideas, "
-            "explain why copy is grounded, and suggest next actions. Do not invent facts. "
-            "If the user asks to change a live review draft, explain what you would change and suggest using the review buttons/chat on the active run if needed."
+        live_context = build_live_chat_context(
+            route=route,
+            channel_id=int(channel_id),
+            message_text=text,
+            discord_context=discord_context or {},
         )
-        result = OpenAIResponsesClient(timeout_s=120).responses_text(
-            model=model,
-            instructions=instructions,
-            input_text=_build_prompt(channel_id=channel_id, user_name=user_name, message_text=text, history=history),
-            reasoning_effort="medium",
-            max_output_tokens=700,
+        model = _model_for_intent(str(route.get("intent") or "general_chat"))
+        prompt = _build_prompt(
+            channel_id=channel_id,
+            user_name=user_name,
+            message_text=text,
+            history=history,
+            route=route,
+            live_context=live_context,
         )
-        if not result.ok:
-            raise RuntimeError(result.error or "OpenAI returned no live chat response")
-        reply = result.text
+        estimated = _estimate_tokens(prompt)
+        budget = _budget_allowed(estimated_input_tokens=estimated)
+        if not budget.get("allowed"):
+            reply = (
+                "I’m pausing this one because today’s estimated token budget is at the hard cap. "
+                f"Daily estimate: {budget.get('daily_total')} tokens; projected: {budget.get('projected')}."
+            )
+            _record_token_usage(
+                {
+                    "created_at": now_iso(),
+                    "channel_id": str(channel_id),
+                    "user_id": str(user_id),
+                    "intent": route.get("intent"),
+                    "model": model,
+                    "estimated_input_tokens": estimated,
+                    "output_tokens": 0,
+                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "blocked": True,
+                    "reason": "daily_hard_cap",
+                }
+            )
+        else:
+            result = OpenAIResponsesClient(timeout_s=120).responses_text(
+                model=model,
+                instructions=_instructions_for_intent(str(route.get("intent") or "general_chat")),
+                input_text=prompt,
+                reasoning_effort="medium",
+                max_output_tokens=900 if route.get("intent") in {"new_lead_copy", "ghl_sms_copy"} else 700,
+            )
+            if not result.ok:
+                raise RuntimeError(result.error or "OpenAI returned no live chat response")
+            reply = result.text
+            usage = result.usage or {}
+            output_tokens = _usage_int(usage, "output_tokens", "completion_tokens")
+            input_tokens = _usage_int(usage, "input_tokens", "prompt_tokens") or estimated
+            _record_token_usage(
+                {
+                    "created_at": now_iso(),
+                    "channel_id": str(channel_id),
+                    "user_id": str(user_id),
+                    "intent": route.get("intent"),
+                    "model": result.model or model,
+                    "endpoint": result.endpoint,
+                    "estimated_input_tokens": input_tokens,
+                    "output_tokens": output_tokens or _estimate_tokens(reply),
+                    "tool_rounds": len(route.get("needs_tools") or []),
+                    "context_used": live_context.get("context_used") or {},
+                    "blocked": False,
+                    "warn_daily_budget": bool(budget.get("warn")),
+                }
+            )
 
     history.append(
         {
@@ -180,10 +378,19 @@ def handle_live_chat_message(
             "name": str(user_name or ""),
             "content": text,
             "created_at": now_iso(),
+            "intent": route.get("intent"),
         }
     )
-    history.append({"role": "assistant", "name": "Captain Hook", "content": reply, "created_at": now_iso()})
-    del history[:-30]
+    history.append(
+        {
+            "role": "assistant",
+            "name": "Captain Hook",
+            "content": reply,
+            "created_at": now_iso(),
+            "intent": route.get("intent"),
+        }
+    )
+    del history[:-_history_limit()]
     _save_state(doc)
     post_result = post_chat_webhook(channel_id=int(channel_id), content=reply)
-    return {"ok": True, "reply": reply, "post": post_result}
+    return {"ok": True, "reply": reply, "post": post_result, "intent": route}

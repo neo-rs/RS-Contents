@@ -98,8 +98,53 @@
       "enabled": true,
       "channel_id": 1517746409112080404,
       "model": "gpt-5.5",
+      "draft_model": "gpt-4o",
+      "router_model": "gpt-4o-mini",
+      "quality_model": "gpt-5.5",
+      "short_term_history_limit": 40,
+      "smart_router_enabled": true,
+      "channel_tools_enabled": true,
+      "role_tools_enabled": true,
+      "ticket_tools_enabled": false,
+      "ghl_sms_tools_enabled": true,
+      "market_tools_enabled": false,
+      "memory_promotion_enabled": false,
+      "token_budget_enabled": true,
       "webhook_username": "Captain Hook",
       "note": "RSAdminBot listens to this channel through Discord Gateway; replies are sent through a webhook stored in config.secrets.json."
+    },
+    "voice_profile": {
+      "name": "RS Captain Hook",
+      "style": [
+        "street-smart RS tone",
+        "not too formal",
+        "confident but not fake hype",
+        "grounded in facts",
+        "market details when source context has them",
+        "persuasive but not desperate"
+      ],
+      "avoid": [
+        "cursing",
+        "kissing ass",
+        "overpromising",
+        "fake urgency",
+        "profit claims without proof",
+        "checkout or member-win claims without proof"
+      ],
+      "content_rules": {
+        "lead_without_success_post": "Frame as a lead or alert. Do not claim checkouts, profit, or member wins.",
+        "cancellation_save": "Future-only until ticket/cancellation rules are configured.",
+        "ghl_sms": "Draft-only, short, plain text, no Discord formatting."
+      }
+    },
+    "token_budget": {
+      "simple_chat_max_input_tokens": 4000,
+      "active_review_max_input_tokens": 10000,
+      "channel_context_max_input_tokens": 18000,
+      "ticket_context_max_input_tokens": 30000,
+      "max_tool_rounds": 5,
+      "warn_after_daily_estimated_tokens": 250000,
+      "hard_stop_after_daily_estimated_tokens": 750000
     },
     "allowed_user_ids": [],
     "allowed_role_ids": [876598078092754985],

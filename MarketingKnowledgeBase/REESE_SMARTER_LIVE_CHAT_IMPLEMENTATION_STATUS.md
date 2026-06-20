@@ -1,8 +1,8 @@
-# Captain Hook Smarter Live Chat Implementation Status
+# Reese Smarter Live Chat Implementation Status
 
 ## Purpose
 
-This file tracks what exists, what is being built, what is placeholder-only, and what remains pending for the smarter Captain Hook live chat upgrade.
+This file tracks what exists, what is being built, what is placeholder-only, and what remains pending for the smarter Reese live chat upgrade.
 
 If implementation work runs out of context, update this file before stopping.
 
@@ -14,7 +14,7 @@ Implemented today before the smarter upgrade:
 
 - `MarketingKnowledgeBase/agent/live_chat.py`
 - RSAdminBot live chat gateway bridge
-- Captain Hook webhook replies
+- Reese webhook replies
 - channel-specific short-term chat history
 - active review run summary
 - `help`, `status`, `active run`, `current run`
@@ -24,7 +24,7 @@ Implemented today before the smarter upgrade:
 
 Main limitation:
 
-- Captain Hook can chat, but it does not yet have enough server tools/context to understand new leads, mentioned channels, role access, GHL/SMS docs, or future ticket workflows.
+- Reese can chat, but it does not yet have enough server tools/context to understand new leads, mentioned channels, role access, GHL/SMS docs, or future ticket workflows.
 
 ## Implementation Checklist
 
@@ -166,6 +166,8 @@ Status: implemented
 Implemented config:
 
 - `agent.voice_profile`
+- `agent.webhook_profile`
+- `MarketingKnowledgeBase/agant-ai-discord-webhook-profile/profile.json`
 
 Voice requirements:
 
@@ -183,6 +185,8 @@ Implemented:
 
 - Added config section.
 - Loaded voice profile into live chat prompts, new lead drafting, GHL/SMS drafting, and future workflow guardrails.
+- Renamed the webhook identity to Reese.
+- Added shared Reese webhook profile loader in `MarketingKnowledgeBase/agent/webhook_profile.py`.
 
 ### Phase 7 - New Lead Copy Flow
 
@@ -278,6 +282,9 @@ Implemented:
 - Estimates tokens per live chat request.
 - Logs model, intent, context usage, tool rounds, input/output token usage to `data/agent_token_usage.json`.
 - Adds soft/hard daily cap config.
+- Enforces per-intent input caps from config.
+- Enforces `max_tool_rounds` from config.
+- Honors `token_budget_enabled`.
 - Routes normal drafts to `gpt-4o` and hard/final work to `gpt-5.5`.
 - Keeps routing deterministic to avoid burning tokens on simple classification.
 
@@ -391,7 +398,7 @@ old marketing-review-agent disabled/inactive
 If you resume this task:
 
 1. Read this file first.
-2. Read `CAPTAIN_HOOK_SMARTER_LIVE_CHAT_BUILD_PLAN.md`.
+2. Read `REESE_SMARTER_LIVE_CHAT_BUILD_PLAN.md`.
 3. Inspect current `agent/live_chat.py`.
 4. Implement one phase at a time.
 5. Update this status file after every phase.

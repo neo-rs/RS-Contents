@@ -94,6 +94,13 @@
   "agent": {
     "enabled": true,
     "review_channel_id": 1517212561697673347,
+    "chat": {
+      "enabled": true,
+      "channel_id": 1517746409112080404,
+      "model": "gpt-5.5",
+      "webhook_username": "Captain Hook",
+      "note": "RSAdminBot listens to this channel through Discord Gateway; replies are sent through a webhook stored in config.secrets.json."
+    },
     "allowed_user_ids": [],
     "allowed_role_ids": [876598078092754985],
     "default_auto_publish_mode": "trusted_after_validation",

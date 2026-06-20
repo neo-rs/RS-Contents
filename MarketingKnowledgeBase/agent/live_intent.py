@@ -35,6 +35,17 @@ NEW_LEAD_HINTS = (
 )
 GHL_SMS_HINTS = ("ghl", "sms", "text blast", "automation", "campaign", "follow up", "follow-up")
 MARKET_HINTS = ("market", "comps", "resale", "ebay", "stockx", "profit", "worth", "selling for")
+CONTENT_DISCOVERY_HINTS = (
+    "best content",
+    "good content",
+    "content right now",
+    "what should we post",
+    "what to post",
+    "strongest content",
+    "best post",
+    "what's hot",
+    "whats hot",
+)
 ROLE_HINTS = ("who has access", "who can see", "roles", "permission", "permissions", "access to")
 SERVER_HINTS = (
     "setup",
@@ -162,6 +173,16 @@ def route_live_chat_intent(
             referenced_channel_ids=channel_ids,
             needs_tools=["search_ghl_sms_docs", "draft_ghl_sms"],
             reason="Message asks for GHL/SMS/campaign copy.",
+        ).to_dict()
+
+    if any(h in lowered for h in CONTENT_DISCOVERY_HINTS):
+        return IntentRoute(
+            intent="content_discovery",
+            confidence=0.88,
+            referenced_channel_ids=channel_ids,
+            needs_tools=["search_archive_content"],
+            requires_active_run=False,
+            reason="Message asks for the strongest current content from synced KB/archive candidates.",
         ).to_dict()
 
     if any(h in lowered for h in ROLE_HINTS):

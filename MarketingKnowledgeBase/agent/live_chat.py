@@ -148,7 +148,7 @@ def _model_for_intent(intent: str) -> str:
     stages = agent.get("model_by_stage") or {}
     if intent in {"general_chat", "server_setup_question", "role_access_question"}:
         return str(chat.get("model") or stages.get("draft") or "gpt-4o")
-    if intent in {"new_lead_copy", "ghl_sms_copy", "market_research"}:
+    if intent in {"new_lead_copy", "ghl_sms_copy", "market_research", "content_discovery"}:
         return str(chat.get("draft_model") or stages.get("draft") or "gpt-4o")
     if intent in {"active_review_help", "cancellation_save"}:
         return str(chat.get("quality_model") or stages.get("final") or chat.get("model") or "gpt-5.5")
@@ -183,7 +183,7 @@ def _feature_enabled(flag: str, default: bool = True) -> bool:
 
 
 def _disabled_feature_reply(intent: str) -> str:
-    if intent == "new_lead_copy" and not _feature_enabled("channel_tools_enabled", True):
+    if intent in {"new_lead_copy", "content_discovery"} and not _feature_enabled("channel_tools_enabled", True):
         return "Channel tools are disabled right now, so I can’t safely read that lead context yet."
     if intent == "role_access_question" and not _feature_enabled("role_tools_enabled", False):
         return "Role/channel access tools are disabled right now, so I won’t guess who can see it."
@@ -204,7 +204,7 @@ def _intent_token_cap(intent: str) -> int:
     key = "simple_chat_max_input_tokens"
     if intent == "active_review_help":
         key = "active_review_max_input_tokens"
-    elif intent in {"new_lead_copy", "channel_question", "role_access_question", "market_research", "ghl_sms_copy"}:
+    elif intent in {"new_lead_copy", "channel_question", "role_access_question", "market_research", "ghl_sms_copy", "content_discovery"}:
         key = "channel_context_max_input_tokens"
     elif intent in {"ticket_support", "cancellation_save", "help_inquiry"}:
         key = "ticket_context_max_input_tokens"
@@ -294,7 +294,16 @@ def _instructions_for_intent(intent: str) -> str:
             base
             + " The user is asking for lead/alert copy. Use the source message/recent channel context. "
             "If there is no success post, frame it as a lead or alert only. Do not say members cooked, hit, checked out, "
-            "made profit, or secured unless the source proves it. Include suggested copy plus what not to claim."
+            "made profit, or secured unless the source proves it. If primary_image_url is present, say that is the image to use. "
+            "Include suggested copy plus what not to claim."
+        )
+    if intent == "content_discovery":
+        return (
+            base
+            + " The user is asking what content is strongest right now. Use archive_content candidates only. "
+            "Recommend the best 1-3 options with why they rank, the source message link, and the exact primary_image_url when present. "
+            "Do not swap images between candidates. If no image is available for a candidate, say so. "
+            "Keep claims separated: lead/alert vs success/member win."
         )
     if intent == "ghl_sms_copy":
         return (
@@ -339,7 +348,7 @@ def handle_live_chat_message(
     if lowered in {"help", "commands"}:
         reply = (
             "I can help with active review drafts, new lead/alert copy from mentioned channels, draft-only GHL/SMS ideas, "
-            "server setup questions, and memory rules. Try: `status`, `what can you write for this lead in #online-important`, "
+            "best-content picks from the KB archives, server setup questions, and memory rules. Try: `status`, `what's the best content right now`, `what can you write for this lead in #online-important`, "
             "`write a GHL SMS for this`, or `remember: no member win claims without proof`."
         )
     elif lowered.startswith("remember:"):
@@ -470,7 +479,7 @@ def handle_live_chat_message(
                 instructions=_instructions_for_intent(str(route.get("intent") or "general_chat")),
                 input_text=prompt,
                 reasoning_effort="medium",
-                max_output_tokens=900 if route.get("intent") in {"new_lead_copy", "ghl_sms_copy"} else 700,
+                max_output_tokens=900 if route.get("intent") in {"new_lead_copy", "ghl_sms_copy", "content_discovery"} else 700,
             )
             if not result.ok:
                 raise RuntimeError(result.error or "OpenAI returned no live chat response")

@@ -14,6 +14,7 @@ from MarketingKnowledgeBase.agent.live_tools import (
     pull_market_context,
     resolve_discord_references,
     search_current_server_context,
+    search_archive_content,
     search_ghl_sms_docs,
     search_ticket_context,
 )
@@ -48,6 +49,7 @@ def build_live_chat_context(
             "ticket_context": {},
             "ghl_sms_docs": [],
             "market_context": {},
+            "archive_content": {},
             "setup_facts": {},
         },
     }
@@ -98,6 +100,16 @@ def build_live_chat_context(
         market = pull_market_context(source_messages=[primary] + recent_messages[:6], query=message_text)
         context["evidence_pack"]["market_context"] = market
         context["context_used"]["live_market_verified"] = bool(market.get("verified_live_market"))
+
+    if intent == "content_discovery":
+        archive = search_archive_content(query=message_text, max_results=6)
+        candidates = archive.get("candidates") or []
+        context["evidence_pack"]["archive_content"] = archive
+        context["evidence_pack"]["primary_message"] = candidates[0] if candidates else {}
+        context["context_used"]["source_messages"] = len(candidates)
+        context["context_used"]["archive_sources_checked"] = [
+            row.get("label") for row in archive.get("sources_checked") or [] if row.get("exists")
+        ]
 
     if intent in {"channel_question", "market_research"}:
         channel_filter = ""

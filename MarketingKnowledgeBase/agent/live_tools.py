@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Tuple
 
 from MarketingKnowledgeBase.agent.state import DATA
+from MarketingKnowledgeBase.story_candidates import build_story_candidates
 
 BASE = Path(__file__).resolve().parents[1]
 REPO = BASE.parent
@@ -75,7 +77,7 @@ def _iter_config_channels() -> Iterable[Dict[str, str]]:
     known = {
         "waitlist": publishing.get("waitlist_channel_id"),
         "review": publishing.get("review_channel_id") or feedback.get("review_channel_id"),
-        "captain-hook-live-chat": chat.get("channel_id"),
+        "reese-live-chat": chat.get("channel_id"),
         "what-you-missed": cfg.get("what_you_missed_channel_id"),
     }
     for name, cid in known.items():
@@ -112,6 +114,50 @@ def live_context_status() -> Dict[str, Any]:
         "last_sync_at": str(live.get("last_sync_at") or "") if isinstance(live, dict) else "",
         "bucket_counts": counts,
     }
+
+
+def _parse_ts(value: Any) -> datetime:
+    text = str(value or "").strip()
+    if not text:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _image_url_from_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value if value.startswith("http") else ""
+    if not isinstance(value, dict):
+        return ""
+    url = str(value.get("url") or value.get("proxy_url") or "").strip()
+    if not url.startswith("http"):
+        return ""
+    content_type = str(value.get("content_type") or "").lower()
+    filename = str(value.get("filename") or "").lower()
+    if content_type.startswith("image/") or filename.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+        return url
+    return url if not content_type else ""
+
+
+def _extract_image_urls(row: Dict[str, Any]) -> List[str]:
+    urls: List[str] = []
+    for key in ("attachments", "embed_images", "images"):
+        values = row.get(key) or []
+        if isinstance(values, dict):
+            values = [values]
+        for value in values if isinstance(values, list) else []:
+            url = _image_url_from_value(value)
+            if url and url not in urls:
+                urls.append(url)
+    image_url = str(row.get("image_url") or row.get("primary_image_url") or "").strip()
+    if image_url.startswith("http") and image_url not in urls:
+        urls.insert(0, image_url)
+    return urls[:6]
 
 
 def _message_links(text: str) -> List[Dict[str, str]]:
@@ -192,6 +238,7 @@ def resolve_discord_references(
 
 
 def _normalize_live_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    image_urls = _extract_image_urls(entry)
     return {
         "message_id": str(entry.get("message_id") or ""),
         "channel_id": str(entry.get("channel_id") or ""),
@@ -203,9 +250,137 @@ def _normalize_live_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
         "urls": entry.get("urls") or [],
         "attachments": entry.get("attachments") or [],
         "embed_images": entry.get("embed_images") or [],
+        "image_urls": image_urls,
+        "primary_image_url": image_urls[0] if image_urls else "",
         "reactions": entry.get("reactions") or [],
         "message_link": str(entry.get("message_link") or entry.get("jump_url") or ""),
         "source": str(entry.get("source") or "live_context"),
+    }
+
+
+def _latest_child_with_file(root: Path, filename: str) -> Path | None:
+    if not root.exists():
+        return None
+    candidates = [child / filename for child in root.iterdir() if child.is_dir() and (child / filename).exists()]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def _archive_candidate_paths() -> List[Tuple[str, Path]]:
+    paths: List[Tuple[str, Path]] = [
+        ("root_live_context", LIVE_CONTEXT),
+        ("root_story_candidates", STORY_CANDIDATES),
+    ]
+    daily_live = _latest_child_with_file(DATA / "daily", "live_context.json")
+    daily_candidates = _latest_child_with_file(DATA / "daily", "story_candidates.json")
+    weekly_live = _latest_child_with_file(DATA / "weekly", "live_context.json")
+    weekly_candidates = _latest_child_with_file(DATA / "weekly", "story_candidates.json")
+    for label, path in (
+        ("latest_daily_live_context", daily_live),
+        ("latest_daily_story_candidates", daily_candidates),
+        ("current_weekly_live_context", weekly_live),
+        ("current_weekly_story_candidates", weekly_candidates),
+    ):
+        if path:
+            paths.append((label, path))
+    return paths
+
+
+def _candidate_from_story(item: Dict[str, Any], *, source_label: str, source_path: Path) -> Dict[str, Any]:
+    image_urls = _extract_image_urls(item)
+    return {
+        "story_id": str(item.get("story_id") or f"{item.get('bucket')}:{item.get('message_id')}"),
+        "message_id": str(item.get("message_id") or ""),
+        "bucket": str(item.get("bucket") or ""),
+        "channel_id": str(item.get("channel_id") or ""),
+        "channel_name": str(item.get("channel_name") or ""),
+        "posted_at": str(item.get("posted_at") or ""),
+        "text": str(item.get("text") or "")[:1800],
+        "message_link": str(item.get("message_link") or ""),
+        "score": int(item.get("score") or 0),
+        "deal_facts": item.get("deal_facts") or {},
+        "headline_hints": item.get("headline_hints") or [],
+        "dollar_amounts": item.get("dollar_amounts") or [],
+        "attachments": item.get("attachments") or [],
+        "embed_images": item.get("embed_images") or [],
+        "image_urls": image_urls,
+        "primary_image_url": image_urls[0] if image_urls else "",
+        "source_label": source_label,
+        "source_path": str(source_path),
+    }
+
+
+def _candidates_from_doc(doc: Dict[str, Any], *, source_label: str, source_path: Path) -> List[Dict[str, Any]]:
+    if isinstance(doc.get("candidates"), list):
+        return [_candidate_from_story(item, source_label=source_label, source_path=source_path) for item in doc.get("candidates") or [] if isinstance(item, dict)]
+    if isinstance(doc.get("buckets"), dict):
+        built = build_story_candidates(doc)
+        return [
+            _candidate_from_story(item, source_label=source_label, source_path=source_path)
+            for item in built.get("candidates") or []
+            if isinstance(item, dict)
+        ]
+    return []
+
+
+def search_archive_content(*, query: str = "", max_results: int = 6) -> Dict[str, Any]:
+    """Search current live data plus latest daily/weekly story archives."""
+
+    terms = _tokens(query)
+    rows: List[Dict[str, Any]] = []
+    sources_checked: List[Dict[str, Any]] = []
+    latest_sync = ""
+    for label, path in _archive_candidate_paths():
+        exists = path.exists()
+        source_row = {"label": label, "path": str(path), "exists": exists}
+        if not exists:
+            sources_checked.append(source_row)
+            continue
+        doc = _read_json(path, {})
+        if isinstance(doc, dict):
+            source_row["last_sync_at"] = str(doc.get("last_sync_at") or doc.get("source_last_sync_at") or doc.get("generated_at") or "")
+            latest_sync = max(latest_sync, str(source_row["last_sync_at"] or ""))
+            candidates = _candidates_from_doc(doc, source_label=label, source_path=path)
+            source_row["candidates"] = len(candidates)
+            rows.extend(candidates)
+        sources_checked.append(source_row)
+
+    by_message: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        mid = str(row.get("message_id") or row.get("story_id") or "")
+        if not mid:
+            continue
+        hay = " ".join(
+            [
+                str(row.get("text") or ""),
+                str(row.get("channel_name") or ""),
+                str(row.get("bucket") or ""),
+                json.dumps(row.get("deal_facts") or {}, ensure_ascii=False),
+            ]
+        ).lower()
+        query_boost = sum(3 for term in terms if term in hay)
+        image_boost = 4 if row.get("primary_image_url") else 0
+        admin_boost = 3 if row.get("bucket") in {"important", "important_instore", "important_trading_cards", "full_send_info"} else 0
+        recency_boost = max(0, 6 - int((datetime.now(timezone.utc) - _parse_ts(row.get("posted_at"))).total_seconds() // 43200)) if row.get("posted_at") else 0
+        row["archive_rank_score"] = int(row.get("score") or 0) + query_boost + image_boost + admin_boost + recency_boost
+        prev = by_message.get(mid)
+        if not prev or int(row.get("archive_rank_score") or 0) > int(prev.get("archive_rank_score") or 0):
+            by_message[mid] = row
+
+    ranked = sorted(
+        by_message.values(),
+        key=lambda row: (int(row.get("archive_rank_score") or 0), _parse_ts(row.get("posted_at"))),
+        reverse=True,
+    )
+    cap = max(1, min(12, int(max_results or 6)))
+    return {
+        "ok": True,
+        "query": query,
+        "latest_sync_at": latest_sync,
+        "sources_checked": sources_checked,
+        "candidates": ranked[:cap],
+        "note": "Use primary_image_url from the selected candidate when drafting visual content.",
     }
 
 

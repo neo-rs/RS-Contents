@@ -121,4 +121,3 @@ def validate_structured_draft(
         "destination_id": destination.get("destination_id"),
         "validation_status": "ready" if ready else "blocked",
     }
-

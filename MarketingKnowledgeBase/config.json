@@ -140,6 +140,7 @@
     },
     "webhook_profile": {
       "username": "Reese",
+      "bio": "Born June 20, 2026.\nCreated by Neo.\n\nHere to help with RS drafts, questions, and questionable confidence levels.\nIf I sound sure, I probably checked twice <a:rsevil:910339367577452644>.",
       "avatar_url": "https://cdn.discordapp.com/attachments/1517544158389207111/1517821897348223067/rs_reese_avatar.png?ex=6a37ad4c&is=6a365bcc&hm=aee4b76e25901a534ac41af493dbe6e564a9b3d082769f89068a26c4ae8645f8&",
       "local_avatar_path": "agant-ai-discord-webhook-profile/avatar/rs_reese_avatar.png",
       "path": "agant-ai-discord-webhook-profile/profile.json",

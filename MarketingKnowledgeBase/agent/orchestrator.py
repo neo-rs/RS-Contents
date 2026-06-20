@@ -227,4 +227,3 @@ def _deterministic_repairing_fallback(
         "ack": "I used the deterministic repair fallback and revalidated the draft.",
         "repair_attempts": repairs,
     }
-

@@ -404,3 +404,4 @@ If you resume this task:
 5. Update this status file after every phase.
 6. Do not enable ticket/cancellation live behavior until data source, privacy, and policy rules are configured.
 7. Keep GHL/SMS as draft-only until explicit approval for sending is given.
+

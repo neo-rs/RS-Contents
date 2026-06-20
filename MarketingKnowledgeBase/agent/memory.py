@@ -111,3 +111,4 @@ def relevant_memory_prompt(*, content_type: str = "", channel_id: str = "", max_
     for row in rows[:max_items]:
         lines.append(f"- {row.get('text')}")
     return "\n".join(lines)
+

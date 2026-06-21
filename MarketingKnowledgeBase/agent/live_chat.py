@@ -284,6 +284,32 @@ def _build_prompt(
     ).strip()
 
 
+def _image_urls_from_live_context(live_context: Dict[str, Any]) -> List[str]:
+    evidence = (live_context.get("evidence_pack") or {}) if isinstance(live_context, dict) else {}
+    urls: List[str] = []
+    for key in ("primary_message", "current_message", "reply_message", "linked_message"):
+        row = evidence.get(key) or {}
+        if not isinstance(row, dict):
+            continue
+        for url in row.get("image_urls") or []:
+            if isinstance(url, str) and url.startswith("http") and url not in urls:
+                urls.append(url)
+        for bucket in ("attachments", "embed_images", "images"):
+            values = row.get(bucket) or []
+            if isinstance(values, dict):
+                values = [values]
+            for item in values if isinstance(values, list) else []:
+                if isinstance(item, str):
+                    url = item
+                elif isinstance(item, dict):
+                    url = str(item.get("url") or item.get("proxy_url") or "")
+                else:
+                    url = ""
+                if url.startswith("http") and url not in urls:
+                    urls.append(url)
+    return urls[:4]
+
+
 def _instructions_for_intent(intent: str) -> str:
     assistant_name = load_webhook_profile(_load_config()).get("username") or "Reese"
     base = (
@@ -300,6 +326,7 @@ def _instructions_for_intent(intent: str) -> str:
             + " The user is asking for lead/alert copy. Use the source message/recent channel context. "
             "If there is no success post, frame it as a lead or alert only. Do not say members cooked, hit, checked out, "
             "made profit, or secured unless the source proves it. If primary_image_url is present, say that is the image to use. "
+            "If the current_message or primary_message includes attachments/embed_images/image_urls, treat those as visible source images and do not say you cannot see them. "
             "Include suggested copy plus what not to claim."
         )
     if intent == "content_discovery":
@@ -354,6 +381,7 @@ def handle_live_chat_message(
     if not text:
         return {"ok": False, "skip": True, "reason": "empty"}
 
+    reply_image_urls: List[str] = []
     doc = _load_state()
     history = _channel_rows(doc, int(channel_id))
     lowered = text.lower()
@@ -366,6 +394,26 @@ def handle_live_chat_message(
         active_run_summary="available" if get_active_review_run() else "",
         history=history[-12:],
     )
+    current_message = (discord_context or {}).get("current_message") or {}
+    current_has_media = bool(
+        isinstance(current_message, dict)
+        and (current_message.get("attachments") or current_message.get("embed_images") or current_message.get("image_urls"))
+    )
+    if current_has_media and str(route.get("intent") or "") == "general_chat":
+        route = {
+            **route,
+            "intent": "new_lead_copy",
+            "confidence": 0.82,
+            "needs_tools": [
+                "resolve_discord_references",
+                "inspect_replied_message",
+                "fetch_recent_channel_messages",
+                "pull_market_context",
+                "draft_lead_copy",
+            ],
+            "requires_active_run": False,
+            "reason": "Current message includes media; treat it as source material for content drafting.",
+        }
     if lowered in {"help", "commands"}:
         reply = (
             "I can help with active review drafts, new lead/alert copy from mentioned channels, draft-only GHL/SMS ideas, "
@@ -420,6 +468,7 @@ def handle_live_chat_message(
             message_text=text,
             discord_context=discord_context or {},
         )
+        reply_image_urls = _image_urls_from_live_context(live_context)
         model = _model_for_intent(str(route.get("intent") or "general_chat"))
         prompt = _build_prompt(
             channel_id=channel_id,
@@ -549,4 +598,4 @@ def handle_live_chat_message(
     del history[:-_history_limit()]
     _save_state(doc)
     post_result = post_chat_webhook(channel_id=int(channel_id), content=reply) if send_reply else {"ok": True, "transport": "caller"}
-    return {"ok": True, "reply": reply, "post": post_result, "intent": route}
+    return {"ok": True, "reply": reply, "post": post_result, "intent": route, "image_urls": reply_image_urls}

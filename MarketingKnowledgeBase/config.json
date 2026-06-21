@@ -373,6 +373,10 @@
       "label": "In-store important deals",
       "channel_ids": [
         1344378714368118794
+      ],
+      "category_ids": [
+        1400165387001135134,
+        1341477669682024588
       ]
     },
     "important_trading_cards": {

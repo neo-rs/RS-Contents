@@ -204,4 +204,3 @@ def post_marketing_generation_audit(
     }
     payload = {"content": "", "embeds": [embed], "allowed_mentions": {"parse": []}}
     _post_discord_payload(channel_id=channel_id, payload=payload, label="generation audit")
-

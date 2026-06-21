@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import discord
+import requests
 
 from MarketingKnowledgeBase.agent.live_chat import handle_live_chat_message, post_chat_webhook
 from MarketingKnowledgeBase.secrets import discord_bot_token
@@ -119,9 +120,11 @@ async def _normalize_message(msg: Any) -> Dict[str, Any]:
 
 async def _build_discord_context(client: discord.Client, message: discord.Message) -> Dict[str, Any]:
     mentioned_channels = list(getattr(message, "channel_mentions", []) or [])
+    current_message = await _normalize_message(message)
     context: Dict[str, Any] = {
         "message_id": str(getattr(message, "id", "") or ""),
         "message_url": str(getattr(message, "jump_url", "") or ""),
+        "current_message": current_message,
         "mentioned_channel_ids": [str(getattr(ch, "id", "") or "") for ch in mentioned_channels],
         "reply_message_id": "",
         "reply_message": {},
@@ -129,6 +132,15 @@ async def _build_discord_context(client: discord.Client, message: discord.Messag
         "recent_channel_messages": {},
         "channel_info": {},
     }
+    try:
+        cid = str(getattr(getattr(message, "channel", None), "id", "") or "")
+        rows = []
+        async for msg in message.channel.history(limit=12):
+            rows.append(await _normalize_message(msg))
+        if cid:
+            context["recent_channel_messages"][cid] = rows
+    except Exception:
+        pass
     try:
         ref = getattr(message, "reference", None)
         resolved = getattr(ref, "resolved", None)
@@ -165,16 +177,36 @@ async def _build_discord_context(client: discord.Client, message: discord.Messag
     return context
 
 
-async def _send_reply(message: discord.Message, reply: str) -> Dict[str, Any]:
+def _download_discord_image(url: str) -> discord.File | None:
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        filename = Path(str(url).split("?", 1)[0]).name or "source-image.png"
+        if "." not in filename:
+            filename = f"{filename}.png"
+        from io import BytesIO
+
+        return discord.File(BytesIO(resp.content), filename=filename[:120])
+    except Exception:
+        return None
+
+
+async def _send_reply(message: discord.Message, reply: str, *, image_urls: List[str] | None = None) -> Dict[str, Any]:
     text = str(reply or "").strip()
     if not text:
         return {"ok": False, "reason": "empty_reply"}
     sent_ids: List[str] = []
+    files: List[discord.File] = []
+    for url in (image_urls or [])[:3]:
+        file_obj = await asyncio.to_thread(_download_discord_image, str(url or ""))
+        if file_obj:
+            files.append(file_obj)
     for idx in range(0, len(text), 2000):
         chunk = text[idx : idx + 2000]
-        sent = await message.channel.send(content=chunk, allowed_mentions=discord.AllowedMentions.none())
+        send_files = files if idx == 0 else []
+        sent = await message.channel.send(content=chunk, files=send_files, allowed_mentions=discord.AllowedMentions.none())
         sent_ids.append(str(getattr(sent, "id", "") or ""))
-    return {"ok": True, "transport": "reese_bot", "message_ids": sent_ids}
+    return {"ok": True, "transport": "reese_bot", "message_ids": sent_ids, "attached_images": len(files)}
 
 
 class ReeseClient(discord.Client):
@@ -198,7 +230,9 @@ class ReeseClient(discord.Client):
                 return
             if not _allowed_user(message.author):
                 return
-            text = str(getattr(message, "content", "") or "").strip()
+            raw_text = str(getattr(message, "content", "") or "").strip()
+            has_media = bool(getattr(message, "attachments", []) or getattr(message, "embeds", []))
+            text = raw_text or ("[image attached]" if has_media else "")
             if not text:
                 return
             async with message.channel.typing():
@@ -217,7 +251,7 @@ class ReeseClient(discord.Client):
                 result = await asyncio.to_thread(_work)
                 reply = str(result.get("reply") or "").strip()
                 try:
-                    post_result = await _send_reply(message, reply)
+                    post_result = await _send_reply(message, reply, image_urls=result.get("image_urls") or [])
                     result["post"] = post_result
                 except Exception:
                     if bool(_reese_bot_config().get("fallback_to_webhook", True)):

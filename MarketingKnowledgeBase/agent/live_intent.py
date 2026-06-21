@@ -21,6 +21,20 @@ ACTIVE_REVIEW_HINTS = (
 )
 NEW_LEAD_HINTS = (
     "lead",
+    "draft",
+    "make me",
+    "make it",
+    "make the draft",
+    "win post",
+    "member win",
+    "member wins",
+    "instore win",
+    "in-store win",
+    "hype up members",
+    "add in the photo",
+    "attach photo",
+    "attach the photo",
+    "screenshot",
     "no success post",
     "write for this",
     "write this up",
@@ -245,7 +259,15 @@ def route_live_chat_intent(
             reason="Message asks who can see or access a channel.",
         ).to_dict()
 
-    if any(h in lowered for h in NEW_LEAD_HINTS) and (channel_ids or message_links or has_reply or "lead" in lowered):
+    if any(h in lowered for h in NEW_LEAD_HINTS) and (
+        channel_ids
+        or message_links
+        or has_reply
+        or "lead" in lowered
+        or "post" in lowered
+        or "photo" in lowered
+        or "screenshot" in lowered
+    ):
         return IntentRoute(
             intent="new_lead_copy",
             confidence=0.9,

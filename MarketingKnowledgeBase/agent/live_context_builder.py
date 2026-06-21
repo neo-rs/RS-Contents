@@ -41,6 +41,7 @@ def build_live_chat_context(
         },
         "evidence_pack": {
             "references": {},
+            "current_message": {},
             "reply_message": {},
             "primary_message": {},
             "recent_channel_messages": [],
@@ -61,6 +62,9 @@ def build_live_chat_context(
         discord_context=discord_context,
     )
     context["evidence_pack"]["references"] = references
+    current_message = (discord_context or {}).get("current_message") or {}
+    if isinstance(current_message, dict) and current_message.get("message_id"):
+        context["evidence_pack"]["current_message"] = current_message
     referenced_channels = references.get("referenced_channels") or []
     context["context_used"]["referenced_channels"] = [
         r.get("channel_name") or r.get("channel_id") for r in referenced_channels
@@ -93,6 +97,7 @@ def build_live_chat_context(
         primary = pick_primary_source_message(
             replied_message=context["evidence_pack"].get("reply_message")
             or context["evidence_pack"].get("linked_message")
+            or context["evidence_pack"].get("current_message")
             or {},
             recent_messages=recent_messages,
         )
@@ -111,6 +116,12 @@ def build_live_chat_context(
         context["context_used"]["archive_sources_checked"] = [
             row.get("label") for row in archive.get("sources_checked") or [] if row.get("exists")
         ]
+
+    if intent == "general_chat" and context["evidence_pack"].get("current_message"):
+        current = context["evidence_pack"]["current_message"]
+        if current.get("attachments") or current.get("embed_images") or current.get("image_urls"):
+            context["evidence_pack"]["primary_message"] = current
+            context["context_used"]["source_messages"] = max(int(context["context_used"].get("source_messages") or 0), 1)
 
     if intent in {"channel_question", "market_research"}:
         channel_filter = ""
